@@ -1,0 +1,93 @@
+import pymysql
+from db_config import DB_CONFIG
+from typing import Dict, Union, List
+import json
+import os
+from pathlib import Path
+
+def get_image_path(iid):
+    """檢查並返回正確的圖片路徑"""
+    base_path = f"/static/assets/img/{iid}"
+    # 依序檢查可能的副檔名
+    extensions = ['.jpg', '.JPG', '.png', '.PNG', '.webp', '.WEBP']
+    for ext in extensions:
+        if os.path.exists(f"static/assets/img/{iid}{ext}"):
+            return f"{base_path}{ext}"
+    return "/static/assets/img/default.jpg"
+
+def get_user_essays(sid: str) -> Dict[str, Union[bool, str, List[dict]]]:
+    connection = None
+    try:
+        connection = pymysql.connect(**DB_CONFIG)
+        
+        # 確保 sid 是整數
+        sid = int(sid)        
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 
+                    es.eid,
+                    es.source,
+                    ei.topic,
+                    ei.content,
+                    ei.updated_at,
+                    CONCAT('[', GROUP_CONCAT(img.iid ORDER BY img.iid SEPARATOR ','), ']') AS iid_list
+                FROM 
+                    essay_state es
+                JOIN 
+                    essay_info ei ON es.eid = ei.eid
+                LEFT JOIN 
+                    image img ON es.eid = img.eid
+                WHERE 
+                    es.sid = %s
+                    AND es.state = 'Completed'
+                GROUP BY 
+                    es.eid, es.source, ei.topic, ei.content, ei.updated_at
+                ORDER BY 
+                    ei.eid;
+            """
+            cursor.execute(sql, (sid,))
+            raw_essays = cursor.fetchall()
+            
+            # 處理日期格式
+            essays = []
+            for essay in raw_essays:
+                # 處理圖片 ID 列表
+                iid_list_str = essay['iid_list']
+                images = []
+                if iid_list_str and iid_list_str != '[]':
+                    # 將字串轉換為 Python 列表
+                    iid_list = json.loads(essay['iid_list'])
+                    # 建構所有圖片路徑，使用新的函數
+                    images = [get_image_path(iid) for iid in iid_list]
+
+                formatted_essay = {
+                    'eid': essay['eid'],
+                    'source': essay['source'],
+                    'topic': essay['topic'],
+                    'content': essay['content'],
+                    'date': essay['updated_at'].strftime('%Y-%m-%d'),
+                    'images': images  # 儲存所有圖片路徑
+                }
+                essays.append(formatted_essay)
+            return {
+                "success": True,
+                "message": "Essays retrieved successfully",
+                "data": essays
+            }
+                
+    except ValueError as ve:
+        print(f"sid 轉換錯誤: {str(ve)}")
+        return {
+            "success": False,
+            "message": "Invalid sid format"
+        }
+    except Exception as e:
+        print(f"詳細錯誤: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Failed to retrieve essays: {str(e)}"
+        }
+    
+    finally:
+        if connection:
+            connection.close()
