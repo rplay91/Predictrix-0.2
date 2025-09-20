@@ -1,0 +1,1 @@
+this is project for predicting essays writing. originally made by Ben. if you are the next researcher, feel free to clone or contact me as collabolator. i know its kinda messy but you can do it better and cleaner, hope you for the best and code well, jiayou!! 
