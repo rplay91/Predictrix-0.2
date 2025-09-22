@@ -1,0 +1,22 @@
+2025-09-22 20:32:26,627 - info_logger - INFO - Init Pipeline Started
+2025-09-22 20:32:26,628 - info_logger - INFO - Init Pipeline Finished, Time spent: 0.0 seconds
+2025-09-22 20:32:28,619 - info_logger - INFO - Document Pipeline Started
+2025-09-22 20:32:28,963 - info_logger - INFO - Document Pipeline Finished, Time spent: 0.34407830238342285 seconds
+2025-09-22 20:32:29,328 - info_logger - INFO - Text Pipeline Started
+2025-09-22 20:33:27,713 - info_logger - INFO - Text Pipeline Finished, Time spent: 58.384706258773804 seconds
+2025-09-22 20:33:27,800 - info_logger - INFO - Graph Pipeline Started
+2025-09-22 20:33:33,271 - info_logger - INFO - Graph Pipeline Finished, Time spent: 5.471136808395386 seconds
+2025-09-22 20:33:33,707 - info_logger - INFO - Attribute Generation Started
+2025-09-22 20:34:01,736 - info_logger - INFO - Attribute Generation Finished, Time spent: 28.028810501098633 seconds
+2025-09-22 20:34:01,818 - info_logger - INFO - Embedding Pipeline Started
+2025-09-22 20:34:05,956 - info_logger - INFO - Embedding Pipeline Finished, Time spent: 4.137747764587402 seconds
+2025-09-22 20:34:06,294 - info_logger - INFO - Summary Generation Pipeline Started
+2025-09-22 20:34:18,141 - info_logger - INFO - Summary Generation Pipeline Finished, Time spent: 11.8473641872406 seconds
+2025-09-22 20:34:18,190 - info_logger - INFO - Insert text and concatenate graph Started
+2025-09-22 20:34:18,289 - info_logger - INFO - Insert text and concatenate graph Finished, Time spent: 0.09858345985412598 seconds
+2025-09-22 20:34:18,513 - info_logger - INFO - HNSW graph generation Started
+2025-09-22 20:34:18,810 - info_logger - INFO - HNSW graph generation Finished, Time spent: 0.29613304138183594 seconds
+2025-09-22 20:34:18,819 - info_logger - INFO - Total time spent: 112.18297290802002 seconds
+2025-09-22 21:10:04,208 - info_logger - INFO - Init Pipeline Started
+2025-09-22 21:10:04,209 - info_logger - INFO - Init Pipeline Finished, Time spent: 0.0009968280792236328 seconds
+2025-09-22 21:10:04,220 - info_logger - INFO - Total time spent: 0.0009968280792236328 seconds

@@ -14,9 +14,9 @@ from db_config import DB_CONFIG
 client = OpenAI(api_key=GPT_API_KEY)
 
 # Initialize NodeRAG
-config = NodeConfig.from_main_folder("./data")
-node_rag = NodeRag(config)
-search_engine = NodeSearch(node_rag)
+
+config = NodeConfig.from_main_folder(r"D:/Master-Degree/Predictrix-0.2/")
+search_engine = NodeSearch(config)
 
 
 # 辨識寫作目的
