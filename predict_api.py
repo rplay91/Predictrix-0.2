@@ -1,10 +1,10 @@
 from openai import OpenAI
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import asyncio
 import time
+import re
 from collections import Counter
-from typing import List
 from datetime import datetime
 from NodeRAG import NodeRag, NodeConfig, NodeSearch
 import pymysql
@@ -47,8 +47,8 @@ Additionally, the user specifies the paragraph containing the predicted sentence
 
     # Send request
     response = client.beta.chat.completions.parse(
-        model="gpt-5-nano-2025-08-07",
-        # reasoning_effort="low",
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
         messages=messages,
         response_format=WritingPurposes,
         n=5 # generate five different text
@@ -64,6 +64,34 @@ Additionally, the user specifies the paragraph containing the predicted sentence
     return writing_purposes_list
 
 # Voting: choose the best writing purpose
+def _resolve_vote_option(selection: str, options: List[str]) -> Optional[int]:
+    """Convert model vote output into 1-based index position, if possible."""
+    if not selection:
+        return None
+    cleaned = selection.strip()
+    if cleaned.isdigit():
+        idx = int(cleaned)
+        return idx if 1 <= idx <= len(options) else None
+
+    digit_match = re.search(r"\d+", cleaned)
+    if digit_match:
+        idx = int(digit_match.group())
+        if 1 <= idx <= len(options):
+            return idx
+
+    lowered = cleaned.lower()
+    for idx, option in enumerate(options, start=1):
+        if lowered == option.strip().lower():
+            return idx
+
+    for idx, option in enumerate(options, start=1):
+        option_lower = option.strip().lower()
+        if option_lower in lowered or lowered in option_lower:
+            return idx
+
+    return None
+
+
 def vote_writing_purpose(current_writing_content, writing_purposes_list):
     # Format candidate purposes for voting
     writing_purposes_options_list = "\n".join([f"{i+1}. {response}" for i, response in enumerate(writing_purposes_list)])
@@ -98,8 +126,8 @@ Three Purposes of Writing:{writing_purposes_options_list}
 
     # Ask the model to evaluate each candidate purpose
     response = client.beta.chat.completions.parse(
-        model="gpt-5-nano-2025-08-07",
-        # reasoning_effort="low",
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
         messages=messages,
         response_format=BestMatchWritingPurposes,
         n=5
@@ -108,7 +136,13 @@ Three Purposes of Writing:{writing_purposes_options_list}
     # Output results: vote results
     best_match_writing_purpose_vote_results = []
     for choice in response.choices:
-        best_match_writing_purpose_vote_results.append(choice.message.parsed.best_match_writing_purpose)
+        selection = _resolve_vote_option(
+            choice.message.parsed.best_match_writing_purpose,
+            writing_purposes_list
+        )
+        if selection is None:
+            return "", "Unable to interpret voting result for writing purpose."
+        best_match_writing_purpose_vote_results.append(selection)
 
     # Check if there is a tie
     best_match_writing_purpose_vote_counts = Counter(best_match_writing_purpose_vote_results)
@@ -121,7 +155,7 @@ Three Purposes of Writing:{writing_purposes_options_list}
         # (previous debug prints removed because they contained non-English text)
         re_writing_purposes_options_list = ""  # Holds formatted candidate purposes for re-voting
         for i, option in enumerate(best_match_writing_purpose_winning_options, start=1):
-            writing_purpose = writing_purposes_list[int(option) - 1]
+            writing_purpose = writing_purposes_list[option - 1]
             re_writing_purposes_options_list += f"{i}. {writing_purpose}\n"
         
         # Build instruction prompt for the tie-breaking round
@@ -135,7 +169,7 @@ Essay Content:
 
 Additionally, the user specifies the paragraph containing the predicted sentence and marks its position using [PREDICTED SENTENCE] within the paragraph’s text.
 
-Two Purposes of Writing:{writing_purposes_options_list}
+Two Purposes of Writing:{re_writing_purposes_options_list}
 
 # Your Task:
 1. Analyze Context: Understand the logical flow of the essay and the role of the predicted sentence.
@@ -152,16 +186,24 @@ Two Purposes of Writing:{writing_purposes_options_list}
         ]
         # Ask the model to resolve the tie between purposes
         response = client.beta.chat.completions.parse(
-            model="gpt-5-nano-2025-08-07",
-            # reasoning_effort="low",
+            model="gpt-5-nano",
+            reasoning_effort="minimal",
             messages=messages,
             response_format=BestMatchWritingPurposes,
-            n=5
+            n=3
         )
         # Output results: re-voting
         re_best_match_writing_purpose_vote_results = []
+        tie_option_indices = best_match_writing_purpose_winning_options[:]
+        tie_option_texts = [writing_purposes_list[idx - 1] for idx in tie_option_indices]
         for choice in response.choices:
-            re_best_match_writing_purpose_vote_results.append(choice.message.parsed.best_match_writing_purpose)
+            selection = _resolve_vote_option(
+                choice.message.parsed.best_match_writing_purpose,
+                tie_option_texts
+            )
+            if selection is None or not (1 <= selection <= len(tie_option_indices)):
+                return "", "Unable to interpret tie-breaking vote result for writing purpose."
+            re_best_match_writing_purpose_vote_results.append(tie_option_indices[selection - 1])
             # print("Number:" + choice.message.parsed.best_match_writing_purpose)
             # print("Reason:" + choice.message.parsed.best_match_writing_purpose_reason + "\n")
         # Count votes again
@@ -169,10 +211,10 @@ Two Purposes of Writing:{writing_purposes_options_list}
         best_match_writing_purpose_highest_vote_result = max(best_match_writing_purpose_vote_counts.values())
         best_match_writing_purpose_winning_options = [option for option, count in best_match_writing_purpose_vote_counts.items() if count == best_match_writing_purpose_highest_vote_result]
         best_match_writing_purpose_winning_option = best_match_writing_purpose_winning_options[0]
-        best_match_writing_purpose = writing_purposes_list[int(best_match_writing_purpose_winning_option) - 1]        
+        best_match_writing_purpose = writing_purposes_list[best_match_writing_purpose_winning_option - 1]
     else:
         best_match_writing_purpose_winning_option = best_match_writing_purpose_winning_options[0]
-        best_match_writing_purpose = writing_purposes_list[int(best_match_writing_purpose_winning_option) - 1]
+        best_match_writing_purpose = writing_purposes_list[best_match_writing_purpose_winning_option - 1]
 
     return best_match_writing_purpose, ""
 
@@ -207,8 +249,8 @@ The purpose of writing predicted sentence: {best_match_writing_purpose}
 
     # Request the model to generate research questions
     query = client.beta.chat.completions.parse(
-        model="gpt-5-nano-2025-08-07",
-        # reasoning_effort="low",
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
         messages=messages,
         response_format=WritingQuerys
     )
@@ -277,8 +319,8 @@ Question: {query}
 
     # Query the model for answers based on the current essay
     answer = client.beta.chat.completions.parse(
-        model="gpt-5-nano-2025-08-07",
-        # reasoning_effort="low",
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
         messages=messages,
         response_format=Answer
     )
@@ -332,8 +374,8 @@ English essays: {history_content}
 
     # Request the model to analyze sentence patterns
     history_writing_pattern_analysis = client.beta.chat.completions.parse(
-        model="gpt-5-nano-2025-08-07",
-        # reasoning_effort="low",
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
         messages=messages,
         response_format=HistoryWritingPatternAnalysis
     )
@@ -383,8 +425,8 @@ English essays: {current_writing_content}
 
     # Request sentence-pattern analysis for the current essay
     current_writing_pattern_analysis = client.beta.chat.completions.parse(
-        model="gpt-5-nano-2025-08-07",
-        # reasoning_effort="low",
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
         messages=messages,
         response_format=CurrentWritingPatternAnalysis
     )
@@ -453,8 +495,8 @@ History Sentence Pattern List:
 
     # Ask the model to choose the most suitable sentence pattern
     predict_sntence_pattern = client.beta.chat.completions.parse(
-        model="gpt-5-nano-2025-08-07",
-        # reasoning_effort="low",
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
         messages=messages,
         response_format=PredictSentencePattern,
         n=5  # Request five alternative sentence-pattern suggestions
@@ -513,8 +555,8 @@ Three Sentence Pattern Options: {predict_sntence_pattern_options_list}
 
     # Ask the model to vote on the best sentence pattern
     response = client.beta.chat.completions.parse(
-        model="gpt-5-nano-2025-08-07",
-        # reasoning_effort="low",
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
         messages=messages,
         response_format=BestMatchSentencePattern,
         n=5  # Request five votes for diversity
@@ -568,11 +610,11 @@ Three Sentence Pattern Options: {predict_sntence_pattern_options_list}
 
         # Request tie-break voting from the model
         tie_response = client.beta.chat.completions.parse(
-            model="gpt-5-nano-2025-08-07",
-            # reasoning_effort="low",
+            model="gpt-5-nano",
+            reasoning_effort="minimal",
             messages=tie_messages,
             response_format=BestMatchSentencePattern,
-            n=5
+            n=3
         )
 
         # Collect tie-break vote results
@@ -650,8 +692,8 @@ Several English essays:
     ]
     # Build prompt for generating the predicted sentence
     writing_pattern_analysis = client.beta.chat.completions.parse(
-            model="gpt-5-nano-2025-08-07",
-            # reasoning_effort="low",
+            model="gpt-5-nano",
+            reasoning_effort="minimal",
             messages=messages,
             response_format=WritingPatternAnalysis,
         )
@@ -767,8 +809,8 @@ Enhancement Details:
     ]
     # Request the final predicted sentence from the model
     predict_sentence = client.beta.chat.completions.parse(
-        model="gpt-5-2025-08-07", #o3-mini #gpt-4o-mini
-        # reasoning_effort="low",
+        model="gpt-5", #o3-mini #gpt-4o-mini
+        reasoning_effort="low",
         messages=messages,
         response_format=PredictSentence
     )
