@@ -857,12 +857,21 @@ async function handlePrediction() {
     });
 
     // 7. 發送預測請求
+    const sidForPrediction = sessionStorage.getItem("sid");
+    const eidForPrediction = essayData?.essay?.eid;
+
+    if (!sidForPrediction || !eidForPrediction) {
+      throw new Error("Missing sid or eid for prediction request");
+    }
+
     const predictResponse = await fetch("/predict_sentence", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        sid: sidForPrediction,
+        eid: eidForPrediction,
         current_essay_content: currentEssayContent,
         history_essay_content: historyResult.content,
         images_info: imagesInfo,

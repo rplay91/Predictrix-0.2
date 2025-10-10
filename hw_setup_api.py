@@ -11,10 +11,10 @@ from db_config import DB_CONFIG
 
 client = OpenAI(api_key=GPT_API_KEY)
 
-# 定義回傳格式
+# NOTE: Comment replaced (original text contained non-English characters).
 class ImageAnalysis(BaseModel):
-    keywords: List[str]  # 關鍵字列表
-    description: str     # 描述文字
+    keywords: List[str]  # NOTE: Comment replaced (original text contained non-English characters).
+    description: str     # NOTE: Comment replaced (original text contained non-English characters).
 
 def analyze_image(image_base64: str) -> dict:
     """使用 gpt-4o-mini 分析圖片內容，針對 EFL 寫作需求提供關鍵字和描述"""
@@ -62,23 +62,23 @@ Response restrictions: No special characters allowed. Include only keywords and 
         
         content = response.choices[0].message.content
         
-        # 解析回應內容
+        # NOTE: Comment replaced (original text contained non-English characters).
         try:
-            # 分離關鍵字和描述
+            # NOTE: Comment replaced (original text contained non-English characters).
             keywords_section = content.split("Keywords:")[1].split("Description:")[0]
             description_section = content.split("Description:")[1]
             
-            # 處理關鍵字
+            # NOTE: Comment replaced (original text contained non-English characters).
             keywords = [
                 k.strip().strip('- ') 
                 for k in keywords_section.strip().split('\n') 
                 if k.strip() and k.strip() != '-'
             ]
             
-            # 處理描述
+            # NOTE: Comment replaced (original text contained non-English characters).
             description = description_section.strip()
             
-            # 使用 Pydantic model 驗證
+            # NOTE: Comment replaced (original text contained non-English characters).
             analysis = ImageAnalysis(
                 keywords=keywords,
                 description=description
@@ -116,17 +116,17 @@ def initialize_homework1_essay(sid: str, title: str) -> Dict[str, any]:
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            # 第一步：新增文章
+            # NOTE: Comment replaced (original text contained non-English characters).
             sql1 = """
                 INSERT INTO essay_info (topic, content, start_time)
                 VALUES (%s, '', NOW())
             """
             cursor.execute(sql1, (title,))
             
-            # 第二步：取得新增的 eid
+            # NOTE: Comment replaced (original text contained non-English characters).
             eid = cursor.lastrowid
             
-            # 第三步：新增狀態記錄
+            # NOTE: Comment replaced (original text contained non-English characters).
             sql2 = """
                 INSERT INTO essay_state (sid, eid, source, state)
                 VALUES (%s, %s, 'Homework1', 'Editing')
@@ -167,17 +167,17 @@ def initialize_homework2_essay(sid: str, title: str) -> Dict[str, any]:
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            # 第一步：新增文章
+            # NOTE: Comment replaced (original text contained non-English characters).
             sql1 = """
                 INSERT INTO essay_info (topic, content, start_time)
                 VALUES (%s, '', NOW())
             """
             cursor.execute(sql1, (title,))
             
-            # 第二步：取得新增的 eid
+            # NOTE: Comment replaced (original text contained non-English characters).
             eid = cursor.lastrowid
             
-            # 第三步：新增狀態記錄
+            # NOTE: Comment replaced (original text contained non-English characters).
             sql2 = """
                 INSERT INTO essay_state (sid, eid, source, state)
                 VALUES (%s, %s, 'Homework2', 'Editing')
@@ -230,16 +230,16 @@ def save_hw_images(eid: str, images: List[dict]) -> dict:
         def clean_keywords(keywords: List[str]) -> str:
             """清理關鍵字列表並轉換為字串"""
             cleaned = [clean_text(kw) for kw in keywords if clean_text(kw)]
-            return ','.join(cleaned)  # 直接轉換為逗號分隔的字串
+            return ','.join(cleaned)  # NOTE: Comment replaced (original text contained non-English characters).
         
         results = []
-        # 確保圖片儲存目錄存在
+        # NOTE: Comment replaced (original text contained non-English characters).
         img_dir = os.path.join('static', 'assets', 'img')
         os.makedirs(img_dir, exist_ok=True)
         
         for img in images:
             with connection.cursor() as cursor:
-                # 清理資料
+                # NOTE: Comment replaced (original text contained non-English characters).
                 cleaned_data = {
                     'keywords': clean_keywords(img['keywords']),
                     'modify_keywords': clean_keywords(img['modify_keywords']),
@@ -247,7 +247,7 @@ def save_hw_images(eid: str, images: List[dict]) -> dict:
                     'modify_description': clean_text(img['modify_description'])
                 }
                 
-                # 插入圖片資訊到資料庫
+                # NOTE: Comment replaced (original text contained non-English characters).
                 sql = """
                     INSERT INTO image (
                         eid, 
@@ -261,26 +261,26 @@ def save_hw_images(eid: str, images: List[dict]) -> dict:
                 """
                 cursor.execute(sql, (
                     eid,
-                    cleaned_data['keywords'],  # 已經是字串，不需要 json.dumps
+                    cleaned_data['keywords'],  # NOTE: Comment replaced (original text contained non-English characters).
                     cleaned_data['modify_keywords'],
                     cleaned_data['description'],
                     cleaned_data['modify_description']
                 ))
                 
-                # 取得新插入的圖片 ID
+                # NOTE: Comment replaced (original text contained non-English characters).
                 iid = cursor.lastrowid
                 
-                # 儲存圖片檔案
+                # NOTE: Comment replaced (original text contained non-English characters).
                 try:
-                    # 從 base64 取得圖片資料
+                    # NOTE: Comment replaced (original text contained non-English characters).
                     img_data = img['file_data']
-                    if ',' in img_data:  # 如果包含 data:image/jpeg;base64,
+                    if ',' in img_data:  # NOTE: Comment replaced (original text contained non-English characters).
                         img_data = img_data.split(',')[1]
                     
-                    # 解碼 base64 並儲存圖片
+                    # NOTE: Comment replaced (original text contained non-English characters).
                     img_binary = base64.b64decode(img_data)
                     
-                    # 根據圖片內容決定副檔名
+                    # NOTE: Comment replaced (original text contained non-English characters).
                     img_header = img_binary[:10]
                     if img_header.startswith(b'\xFF\xD8'):
                         ext = '.jpg'
@@ -289,9 +289,9 @@ def save_hw_images(eid: str, images: List[dict]) -> dict:
                     elif img_header.startswith(b'RIFF') and b'WEBP' in img_header:
                         ext = '.webp'
                     else:
-                        ext = '.jpg'  # 預設使用 jpg
+                        ext = '.jpg'  # NOTE: Comment replaced (original text contained non-English characters).
                     
-                    # 儲存圖片
+                    # NOTE: Comment replaced (original text contained non-English characters).
                     img_path = os.path.join(img_dir, f"{iid}{ext}")
                     with open(img_path, 'wb') as f:
                         f.write(img_binary)

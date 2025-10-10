@@ -4,7 +4,7 @@
 model_config:
   service_provider: openai            # AI service provider (e.g., openai, azure)
   model_name: gpt-4o-mini            # Model name for text generation
-  api_keys: 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  # Your API key (optional)
+  api_keys: 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 # Your API key (optional)
   temperature: 0                # Temperature parameter for text generation
   max_tokens: 10000                  # Maximum tokens to generate
   rate_limit: 40                      # API rate limit (requests per second)
@@ -12,7 +12,7 @@ model_config:
 embedding_config:
   service_provider: openai_embedding  # Embedding service provider
   embedding_model_name: text-embedding-3-small  # Model name for text embeddings
-  api_keys: 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    # Your API key (optional)
+  api_keys: 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   # Your API key (optional)
   rate_limit: 20                      # Rate limit for embedding requests
 
 

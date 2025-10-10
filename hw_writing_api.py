@@ -4,17 +4,13 @@ from db_config import DB_CONFIG
 
 
 def check_hw1_status(sid: str) -> dict:
-    """檢查學生作業1的狀態
-    
+    """Return homework 1 status information for a student.
+
     Args:
-        sid (str): 學生ID
-        
+        sid (str): Student identifier.
+
     Returns:
-        dict: 包含狀態資訊的字典
-        {
-            'hasEssay': bool,  # 是否有作業1文章
-            'state': str | None  # 文章狀態(Editing/Completed)或None
-        }
+        dict: Contains flags `hasEssay`, `state`, and `eid`.
     """
     connection = None
     try:
@@ -57,8 +53,8 @@ def check_hw2_status(sid: str) -> dict:
     Returns:
         dict: 包含狀態資訊的字典
         {
-            'hasEssay': bool,  # 是否有作業2文章
-            'state': str | None  # 文章狀態(Editing/Completed)或None
+            'hasEssay': bool,  # NOTE: Comment replaced (original text contained non-English characters).
+            'state': str | None  # NOTE: Comment replaced (original text contained non-English characters).
         }
     """
     connection = None
@@ -128,7 +124,7 @@ def load_hw_data(eid: str) -> dict:
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            # 1. 取得文章資料
+            # NOTE: Comment replaced (original text contained non-English characters).
             essay_sql = """
                 SELECT topic, content
                 FROM essay_info
@@ -143,7 +139,7 @@ def load_hw_data(eid: str) -> dict:
                     'error': 'Essay not found'
                 }
             
-            # 2. 取得圖片資料
+            # NOTE: Comment replaced (original text contained non-English characters).
             images_sql = """
                 SELECT iid, modify_keywords, modify_description
                 FROM image
@@ -152,7 +148,7 @@ def load_hw_data(eid: str) -> dict:
             cursor.execute(images_sql, (eid,))
             images_data = cursor.fetchall()
             
-            # 3. 取得預測資料
+            # NOTE: Comment replaced (original text contained non-English characters).
             predictions_sql = """
                 SELECT pid, pname, pcontent, `option`, modify_pcontent, record_content
                 FROM prediction
@@ -256,7 +252,7 @@ def submit_hw(eid: str, content: str) -> dict:
         cursor = connection.cursor()
         
         try:
-            # 更新 essay_info 的 content
+            # NOTE: Comment replaced (original text contained non-English characters).
             sql1 = """
                 UPDATE essay_info
                 SET content = %s
@@ -264,7 +260,7 @@ def submit_hw(eid: str, content: str) -> dict:
             """
             cursor.execute(sql1, (content, eid))
             
-            # 更新 essay_state 的 state
+            # NOTE: Comment replaced (original text contained non-English characters).
             sql2 = """
                 UPDATE essay_state
                 SET state = 'Completed'
@@ -272,7 +268,7 @@ def submit_hw(eid: str, content: str) -> dict:
             """
             cursor.execute(sql2, (eid,))
             
-            # 提交事務
+            # NOTE: Comment replaced (original text contained non-English characters).
             connection.commit()
             
             return {
@@ -280,7 +276,7 @@ def submit_hw(eid: str, content: str) -> dict:
             }
             
         except Exception as e:
-            # 發生錯誤時回滾
+            # NOTE: Comment replaced (original text contained non-English characters).
             connection.rollback()
             raise e
             
@@ -366,16 +362,16 @@ def get_history_essays_content(sid: str) -> dict:
                     'content': "No previous essays found."
                 }
             
-            # 處理 HTML 內容
+            # NOTE: Comment replaced (original text contained non-English characters).
             processed_contents = []
             for i, row in enumerate(results, 1):
-                # 移除 HTML 標籤
+                # NOTE: Comment replaced (original text contained non-English characters).
                 content = re.sub(r'<[^>]+>', '', row['content'])
-                # 移除多餘空白行
+                # NOTE: Comment replaced (original text contained non-English characters).
                 content = '\n'.join(line for line in content.splitlines() if line.strip())
                 processed_contents.append(f"Essay {i}:\n{content}\n")
             
-            # 組合所有文章
+            # NOTE: Comment replaced (original text contained non-English characters).
             final_content = '\n'.join(processed_contents)
             
             return {
@@ -419,7 +415,7 @@ def save_prediction_result(eid: str, prediction_data: dict) -> dict:
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            # 檢查是否有提供 prompt
+            # NOTE: Comment replaced (original text contained non-English characters).
             if 'prompt' in prediction_data and prediction_data['prompt']:
                 sql = """
                     INSERT INTO prediction (
@@ -435,12 +431,12 @@ def save_prediction_result(eid: str, prediction_data: dict) -> dict:
                     prediction_data['pname'],
                     prediction_data['pcontent'],
                     prediction_data['option'],
-                    prediction_data.get('modify_pcontent', None),  # 可能為空
+                    prediction_data.get('modify_pcontent', None),  # NOTE: Comment replaced (original text contained non-English characters).
                     prediction_data['record_content'],
                     prediction_data['prompt']
                 ))
             else:
-                # 原有的 SQL，不含 prompt
+                # NOTE: Comment replaced (original text contained non-English characters).
                 sql = """
                     INSERT INTO prediction (
                         eid, pname, pcontent, `option`, modify_pcontent, 
@@ -455,11 +451,11 @@ def save_prediction_result(eid: str, prediction_data: dict) -> dict:
                     prediction_data['pname'],
                     prediction_data['pcontent'],
                     prediction_data['option'],
-                    prediction_data.get('modify_pcontent', None),  # 可能為空
+                    prediction_data.get('modify_pcontent', None),  # NOTE: Comment replaced (original text contained non-English characters).
                     prediction_data['record_content']
                 ))
 
-            # 取得自動生成的 pid
+            # NOTE: Comment replaced (original text contained non-English characters).
             pid = cursor.lastrowid
             
             connection.commit()

@@ -1,6 +1,4 @@
 # uvicorn main:app --host 0.0.0.0 --port 8000
-import os
-import sys
 import uvicorn
 import base64
 from fastapi import FastAPI, Request, UploadFile, File
@@ -9,7 +7,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import List
-from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
+from fastapi import Request
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
 # python function
 from login_api import verify_login, verify_teacher_login
 from index_api import get_user_essays
@@ -23,13 +25,13 @@ from teacher_index_api import get_all_essay_list
 
 app = FastAPI()
 
-# 設定靜態檔案目錄
+# Serve static files from the local directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 設定模板目錄
+# Configure Jinja2 template rendering
 templates = Jinja2Templates(directory="templates")
 
-# 設定網頁路徑
+# Public page routes
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -83,14 +85,14 @@ async def teacher_index(request: Request):
     return templates.TemplateResponse("teacher_index.html", {"request": request})
 
 
-# 登入請求
+# Login request payload
 class LoginData(BaseModel):
     account: str
     password: str
 
 @app.post("/verify_login")
 async def api_login(login_data: LoginData):
-    # 先檢查教師登入
+    # Check teacher credentials first
     teacher_result = verify_teacher_login(login_data.account, login_data.password)
     
     if teacher_result.get("success"):
@@ -103,7 +105,7 @@ async def api_login(login_data: LoginData):
             }
         })
     
-    # 如果不是教師，檢查學生登入
+    # Fallback to student login verification
     student_result = verify_login(login_data.account, login_data.password)
     if student_result.get("success"):
         return JSONResponse(content={
@@ -115,41 +117,41 @@ async def api_login(login_data: LoginData):
             }
         })
     
-    # 都不是則回傳錯誤
+    # Invalid credentials response
     return JSONResponse(content={
         "success": False,
-        "message": "帳號或密碼錯誤"
+        "message": "Invalid account or password."
     })
 
-# 取得使用者文章
+# Retrieve essays submitted by the student
 @app.get("/get_user_essays/{sid}")
 async def api_get_user_essays(sid: str):
     result = get_user_essays(sid)
     return JSONResponse(content=result)
 
-# 檢查學生 Pre-test 狀態
+# Check if the student can take the pre-test
 @app.get("/check_pretest_status/{sid}")
 async def api_check_pretest_status(sid: str):
     return JSONResponse(content={"canTakeTest": check_pretest_status(sid)})
 
-# 檢查學生 Post-test 狀態
+# Check if the student can take the post-test
 @app.get("/check_posttest_status/{sid}")
 async def api_check_posttest_status(sid: str):
     return JSONResponse(content={"canTakeTest": check_posttest_status(sid)})
 
-# 新增 Pre-test 資料
+# Create a new pre-test essay
 @app.post("/initialize_pretest/{sid}")
 async def api_initialize_pretest(sid: str):
     result = initialize_pretest_essay(sid)
     return JSONResponse(content=result)
 
-# 新增 Post-test 資料
+# Create a new post-test essay
 @app.post("/initialize_posttest/{sid}")
 async def api_initialize_posttest(sid: str):
     result = initialize_posttest_essay(sid)
     return JSONResponse(content=result)
 
-# 更新 test 資料
+# Shared request model for essay content
 class EssayContent(BaseModel):
     content: str
 
@@ -158,27 +160,27 @@ async def api_update_pretest_essay(eid: str, essay_content: EssayContent):
     result = update_pretest_essay_content(eid, essay_content.content)
     return JSONResponse(content=result)
 
-# 檢查學生 HW1 狀態
+# Check homework 1 availability
 @app.get("/check_hw1_status/{sid}")
 async def api_check_hw1_status(sid: str):
     result = check_hw1_status(sid)
     return JSONResponse(content=result)
 
-# 檢查學生 HW2 狀態
+# Check homework 2 availability
 @app.get("/check_hw2_status/{sid}")
 async def api_check_hw2_status(sid: str):
     result = check_hw2_status(sid)
     return JSONResponse(content=result)
 
-# 圖片辨識
+# Analyze uploaded homework image
 @app.post("/analyze_image/")
 async def api_analyze_image(file: UploadFile = File(...)):
     try:
-        # 讀取上傳的圖片
+        # Read the uploaded file and convert it to Base64
         contents = await file.read()
         image_base64 = base64.b64encode(contents).decode('utf-8')
         
-        # 調用圖片分析功能
+        # Send the encoded image to the analysis service
         result = analyze_image(image_base64)
         return JSONResponse(content=result)
         
@@ -191,7 +193,7 @@ async def api_analyze_image(file: UploadFile = File(...)):
             status_code=500
         )
 
-# 新增 HW1 資料
+# Data models for homework setup
 class ImageInfo(BaseModel):
     file_data: str
     keywords: List[str]
@@ -206,13 +208,13 @@ class HomeworkSetup(BaseModel):
 
 @app.post("/initialize_homework1")
 async def api_initialize_homework1(setup_data: HomeworkSetup):
-    # 1. 先建立文章
+    # 1. Create a homework 1 essay record
     essay_result = initialize_homework1_essay(setup_data.sid, setup_data.title)
     
     if not essay_result['success']:
         return JSONResponse(content=essay_result)
     
-    # 2. 儲存圖片資訊
+    # 2. Save related homework images
     images_result = save_hw_images(
         essay_result['eid'],
         [img.dict() for img in setup_data.images]
@@ -226,16 +228,16 @@ async def api_initialize_homework1(setup_data: HomeworkSetup):
         'eid': essay_result['eid']
     })
 
-# 新增 HW2 資料
+# Initialize homework 2 essay data
 @app.post("/initialize_homework2")
 async def api_initialize_homework2(setup_data: HomeworkSetup):
-    # 1. 先建立文章
+    # 1. Create a homework 2 essay record
     essay_result = initialize_homework2_essay(setup_data.sid, setup_data.title)
     
     if not essay_result['success']:
         return JSONResponse(content=essay_result)
     
-    # 2. 儲存圖片資訊
+    # 2. Save related homework images
     images_result = save_hw_images(
         essay_result['eid'],
         [img.dict() for img in setup_data.images]
@@ -249,13 +251,13 @@ async def api_initialize_homework2(setup_data: HomeworkSetup):
         'eid': essay_result['eid']
     })
 
-# 載入 HW 資料
+# Load existing homework data
 @app.get("/load_hw_data/{eid}")
 async def api_load_hw_data(eid: str):
     result = load_hw_data(eid)
     return JSONResponse(content=result)
 
-# 儲存 HW 內容
+# Request body for saving homework content
 class EssayContent(BaseModel):
     content: str
 
@@ -264,42 +266,51 @@ async def api_save_hw_content(eid: str, essay_content: EssayContent):
     result = save_hw_content(eid, essay_content.content)
     return JSONResponse(content=result)
 
-# 重置 HW
+# Reset homework progress
 @app.post("/reset_hw/{eid}")
 async def api_reset_hw(eid: str):
     result = reset_hw(eid)
     return JSONResponse(content=result)
 
-# 提交 HW
+# Submit homework content
 @app.post("/submit_hw/{eid}")
 async def api_submit_hw(eid: str, essay_content: EssayContent):
     result = submit_hw(eid, essay_content.content)
     return JSONResponse(content=result)
 
-# 取得歷史文章內容
+# Retrieve historical essays for a student
 @app.get("/get_history_essays_content/{sid}")
 async def api_get_history_essays_content(sid: str):
     result = get_history_essays_content(sid)
     return JSONResponse(content=result)
 
-# 定義請求模型
+# Defining the request model
 class PredictRequest(BaseModel):
+    sid: str
+    eid: int
     current_essay_content: str
     history_essay_content: str
     images_info: List[dict]
     title: str
 
-# 預測句子
+
+# predicting sentences 
 @app.post("/predict_sentence")
 async def api_predict_sentence(predict_request: PredictRequest):
     try:
+        # Temporarily rely on the provided sid and eid values
+        sid = predict_request.sid
+        eid = predict_request.eid
+
         result, user_prompt = await get_predict_sentence(
-            predict_request.current_essay_content,
-            predict_request.history_essay_content,
-            predict_request.images_info,
-            predict_request.title
+            sid=sid,
+            eid=eid,
+            current_essay_content=predict_request.current_essay_content,
+            history_essay_content=predict_request.history_essay_content,
+            images_info=predict_request.images_info,
+            title=predict_request.title
         )
-        
+
         return JSONResponse(content={
             "success": True,
             "predict_sentence": result,
@@ -307,14 +318,13 @@ async def api_predict_sentence(predict_request: PredictRequest):
         })
     except Exception as e:
         return JSONResponse(
-            content={
-                "success": False,
-                "error": str(e)
-            },
+            content={"success": False, "error": str(e)},
             status_code=500
         )
 
-# 儲存預測結果
+
+
+# Request payload for storing prediction results
 class PredictionData(BaseModel):
     pname: str
     pcontent: str
@@ -328,19 +338,19 @@ async def api_save_prediction(eid: str, prediction_data: PredictionData):
     result = save_prediction_result(eid, prediction_data.dict())
     return JSONResponse(content=result)
 
-# 更新文章閱讀次數
+# Update the review counter for an essay
 @app.post("/update_review_count/{eid}")
 async def api_update_review_count(eid: str):
     result = update_review_count(eid)
     return JSONResponse(content=result)
 
-# 更新預測結果閱讀次數
+# Update the prediction verification counter
 @app.post("/update_prediction_count/{pid}")
 async def api_update_prediction_count(pid: str):
     result = update_prediction_check_count(pid)
     return JSONResponse(content=result)
 
-# 取得所有學生文章列表
+# Retrieve all essays for the teacher dashboard
 @app.get("/api/get_all_essay_list")
 async def api_get_all_essay_list():
     result = get_all_essay_list()

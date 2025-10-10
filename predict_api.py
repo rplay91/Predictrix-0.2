@@ -7,19 +7,19 @@ from collections import Counter
 from typing import List
 from datetime import datetime
 from NodeRAG import NodeRag, NodeConfig, NodeSearch
+import pymysql
 
 from api_config import GPT_API_KEY
 from db_config import DB_CONFIG
-
 client = OpenAI(api_key=GPT_API_KEY)
 
-# Initialize NodeRAG
 
+# Initialize NodeRAG
 config = NodeConfig.from_main_folder(r"D:/Master-Degree/Predictrix-0.2/")
 search_engine = NodeSearch(config)
 
 
-# 辨識寫作目的
+# Identify the writing purpose
 def identify_writing_purpose(current_writing_content):
     user_prompt = f"""# Instruction:
 You are an advanced AI assistant with expertise in English writing. Your task is to analyze the writing purpose of the predicted sentence in a English essay. Please think step by step.
@@ -36,40 +36,40 @@ Additionally, the user specifies the paragraph containing the predicted sentence
 2. Identify Writing Purpose: Consider whether the predicted sentence should introduce an idea, provide evidence, offer a transition, or summarize a point.
 3. Just output the purpose of predicted sentence you analyzed."""
 
-    # 輸出格式
+    # Output format
     class WritingPurposes(BaseModel):
         writing_purposes: str
 
-    # 構建 response
+    # Prepare request payload for the language model
     messages=[
         {"role": "user", "content": user_prompt}
     ]
 
-    # 發送請求
+    # Send request
     response = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-5-nano-2025-08-07",
         # reasoning_effort="low",
         messages=messages,
         response_format=WritingPurposes,
-        n=5 # 生成五個寫作目的
+        n=5 # generate five different text
     )
 
-    # 輸出結果: 五個寫作目的
+    #  Output result: writing purposes list
     writing_purposes_list = []
 
     for choice in response.choices:
         writing_purposes_list.append(choice.message.parsed.writing_purposes)
 
-    # 回傳結果
+    # Return the list of candidate writing purposes
     return writing_purposes_list
 
-# 投票:寫作目的
+# Voting: choose the best writing purpose
 def vote_writing_purpose(current_writing_content, writing_purposes_list):
-    # 將所有寫作目的做為選項加入列表中
+    # Format candidate purposes for voting
     writing_purposes_options_list = "\n".join([f"{i+1}. {response}" for i, response in enumerate(writing_purposes_list)])
-    # Voting Prompt: 選出最符合輸入情境的寫作目的
+    # Build voting prompt for the language model
     user_prompt = f"""# Instruction:
-You are an advanced AI assistant with expertise in English writing. Your task is to analyze a predicted sentence in a English essay and determine which of five given purposes of writing best aligns with its intended function. Additionally, you must consider whether purposes of writing aligns with the English essay cntext. Please think step by step.
+You are an advanced AI assistant with expertise in English writing. Your task is to analyze a predicted sentence in a English essay and determine which of three given purposes of writing best aligns with its intended function. Additionally, you must consider whether purposes of writing aligns with the English essay cntext. Please think step by step.
 
 # Input Structure:
 The user provides the essay's content:
@@ -78,53 +78,53 @@ Essay Content:
 
 Additionally, the user specifies the paragraph containing the predicted sentence and marks its position using [PREDICTED SENTENCE] within the paragraph’s text.
 
-Five Purposes of Writing:{writing_purposes_options_list}
+Three Purposes of Writing:{writing_purposes_options_list}
 
 # Your Task:
 1. Analyze Context: Understand the logical flow of the essay and the role of the predicted sentence.
-2. Evaluate Purposes of Writing: Compare the predicted sentence’s expected function with the five given purposes of writing and assess whether it aligns with situation description cntext.
+2. Evaluate Purposes of Writing: Compare the predicted sentence’s expected function with the Three given purposes of writing and assess whether it aligns with situation description cntext.
 3. Select the Best Fit: Identify and justify which purpose of writing most accurately aligns with the predicted sentence's role and the English essay cntext.(Respond with a number: 1, 2, 3, 4, or 5)
 4. Explain Your Choice: Provide a brief explanation supporting your selection based on the essay’s structure and logical coherence."""
 
-    # 輸出格式
+    # Output format
     class BestMatchWritingPurposes(BaseModel):
         best_match_writing_purpose: str
         best_match_writing_purpose_reason: str
 
-    # 構建 response
+    # Prepare voting request payload for the language model
     messages=[
         {"role": "user", "content": user_prompt}
     ]
 
-    # 發送請求
+    # Ask the model to evaluate each candidate purpose
     response = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-5-nano-2025-08-07",
         # reasoning_effort="low",
         messages=messages,
         response_format=BestMatchWritingPurposes,
         n=5
     )
 
-    # 輸出結果: 票選結果
+    # Output results: vote results
     best_match_writing_purpose_vote_results = []
     for choice in response.choices:
         best_match_writing_purpose_vote_results.append(choice.message.parsed.best_match_writing_purpose)
 
-    # 計算票數
+    # Check if there is a tie
     best_match_writing_purpose_vote_counts = Counter(best_match_writing_purpose_vote_results)
     best_match_writing_purpose_highest_vote_result = max(best_match_writing_purpose_vote_counts.values())
     best_match_writing_purpose_winning_options = [option for option, count in best_match_writing_purpose_vote_counts.items() if count == best_match_writing_purpose_highest_vote_result]
 
-    # 確認是否有平票
+    # Re-voting prompt: choose the final result
     if len(best_match_writing_purpose_winning_options) > 1:
-        # print("平票的選項編號:", best_match_writing_purpose_winning_options)
-        # print("需要進行重新投票以選出最終結果。")
-        re_writing_purposes_options_list = ""  # 初始化空字串
+        # Prepare tie-breaking options for a second voting round
+        # (previous debug prints removed because they contained non-English text)
+        re_writing_purposes_options_list = ""  # Holds formatted candidate purposes for re-voting
         for i, option in enumerate(best_match_writing_purpose_winning_options, start=1):
             writing_purpose = writing_purposes_list[int(option) - 1]
             re_writing_purposes_options_list += f"{i}. {writing_purpose}\n"
         
-        # Re-Voting Prompt: 選出最符合輸入情境的寫作目的
+        # Build instruction prompt for the tie-breaking round
         user_prompt = f"""# Instruction:
 You are an advanced AI assistant with expertise in English writing. Your task is to analyze a predicted sentence in a English essay and determine which of two given purposes of writing best aligns with its intended function. Additionally, you must consider whether purposes of writing aligns with the English essay cntext. Please think step by step.
 
@@ -142,29 +142,29 @@ Two Purposes of Writing:{writing_purposes_options_list}
 2. Evaluate Purposes of Writing: Compare the predicted sentence’s expected function with the two given purposes of writing and assess whether it aligns with situation description cntext.
 3. Select the Best Fit: Identify and justify which purpose of writing most accurately aligns with the predicted sentence's role and the English essay cntext.(Respond with a number: 1, 2, 3, 4, or 5)
 4. Explain Your Choice: Provide a brief explanation supporting your selection based on the essay’s structure and logical coherence."""
-        # 輸出格式
+        # Output format
         class BestMatchWritingPurposes(BaseModel):
             best_match_writing_purpose: str
             best_match_writing_purpose_reason: str
-        # 構建 response
+        # Prepare tie-breaking request payload
         messages=[
             {"role": "user", "content": user_prompt}
         ]
-        # 發送請求
+        # Ask the model to resolve the tie between purposes
         response = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
+            model="gpt-5-nano-2025-08-07",
             # reasoning_effort="low",
             messages=messages,
             response_format=BestMatchWritingPurposes,
-            n=3
+            n=5
         )
-        # 輸出結果: 票選結果
+        # Output results: re-voting
         re_best_match_writing_purpose_vote_results = []
         for choice in response.choices:
             re_best_match_writing_purpose_vote_results.append(choice.message.parsed.best_match_writing_purpose)
             # print("Number:" + choice.message.parsed.best_match_writing_purpose)
             # print("Reason:" + choice.message.parsed.best_match_writing_purpose_reason + "\n")
-        # 計算票數
+        # Count votes again
         best_match_writing_purpose_vote_counts = Counter(re_best_match_writing_purpose_vote_results)
         best_match_writing_purpose_highest_vote_result = max(best_match_writing_purpose_vote_counts.values())
         best_match_writing_purpose_winning_options = [option for option, count in best_match_writing_purpose_vote_counts.items() if count == best_match_writing_purpose_highest_vote_result]
@@ -176,7 +176,7 @@ Two Purposes of Writing:{writing_purposes_options_list}
 
     return best_match_writing_purpose, ""
 
-# 生成問題(Max 3)
+# Generate queries (max 3)
 def generate_question(current_writing_content, best_match_writing_purpose):
     user_prompt = f"""# Instruction:
 You are an advanced AI assistant with expertise in analyzing English writing. Your task is to improve the predicted sentence in an English essay by formulating effective database queries. The predicted sentence has a specific purpose of writing, which will be provided as input.  Your ultimate goal is to generate three targeted, insightful questions that can retrieve relevant and useful information from the database to refine the predicted sentence.
@@ -196,31 +196,31 @@ The purpose of writing predicted sentence: {best_match_writing_purpose}
 3. Each question should be crafted to extract specific information from the database that will help enhance the predicted sentence's effectiveness.
 4. Think carefully about what aspects of the writing need further research, and ensure that your questions are directly aligned with the writing purpose."""
 
-    # 輸出格式
+    # Response schema for generated questions
     class WritingQuerys(BaseModel):
         query: List[str]
 
-    # 構建 response
+    # Prepare question-generation payload
     messages=[
         {"role": "user", "content": user_prompt}
     ]
 
-    # 發送請求
+    # Request the model to generate research questions
     query = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-5-nano-2025-08-07",
         # reasoning_effort="low",
         messages=messages,
         response_format=WritingQuerys
     )
 
-    # 結果: 生成數個問題
+    # Result: generated questions
     query_list = query.choices[0].message.parsed.query
 
     return query_list
 
-# 從 History Essays 提取資訊
+# Result: generated questions
 async def answer_from_history(query):
-    # 定義 query
+    # Build prompt for retrieving factual answers from historical data
     user_prompt = f"""# Instruction:
 You are an AI assistant tasked with extracting accurate information from a provided Knowledge Graph subgraph. Your primary goal is to answer the user's question strictly based on the facts present in the Knowledge Graph supplied below. If the answer is not explicitly represented or cannot be directly inferred from the graph relations, respond with "No related information." Avoid making assumptions, adding external knowledge, or generating speculative answers. Please think step by step.
 
@@ -238,12 +238,14 @@ Question: {query}
         # Kirim user_prompt ke NodeRAG search engine
         result = search_engine.query(user_prompt)
         if result and hasattr(result, "answer"):
+            print(result.answer)
             return result.answer
+        print("no related info")
         return "No related information."
     except Exception as e:
         return f"Error during NodeRAG search: {str(e)}"
 
-# 從 Current Essay 提取資訊
+# Answer questions using the current essay content
 def answer_from_current(current_writing_content, query):
     user_prompt = f"""
 # Instruction:
@@ -264,31 +266,32 @@ Question: {query}
 """
     user_prompt = user_prompt.replace("[PREDICTED SENTENCE]", "")
 
-    # 輸出格式
+    # Response schema for answers drawn from the current essay
     class Answer(BaseModel):
         answer: str
 
-    # 構建 response
+    # Prepare payload for the current-essay answer step
     messages=[
         {"role": "user", "content": user_prompt}
     ]
 
-    # 發送請求
+    # Query the model for answers based on the current essay
     answer = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-5-nano-2025-08-07",
         # reasoning_effort="low",
         messages=messages,
         response_format=Answer
     )
 
-    # 取得結果: 問題答案
+    # Extract the parsed answer text
     query_answer_from_current = answer.choices[0].message.parsed.answer
 
+    print(query_answer_from_current)
     return str(query_answer_from_current)
 
-# 提取Sentence Pattern
+# Identify sentence patterns using current and historical essays
 def identify_sentence_pattern(current_writing_content, history_content, best_match_writing_purpose):
-    # Prompt: 提取Sentence Patterns
+    # Build prompt for detailed sentence-pattern analysis
     user_prompt = f"""#Instruction:
 You are a writing analysis AI designed to help users understand their writing style. Your task is to analyze the provided English essays and identify sentence patterns. You should provide detailed explanations for each identified category and include examples from the text.
 # Task Details:
@@ -310,7 +313,7 @@ English essays: {history_content}
 1. Analyze the provided essays to identify writing patterns and features.
 2. Returning your analysis results in the output structure, ensuring each section is thorough and well-explained."""
 
-    # 輸出格式
+    # Response schema for sentence-pattern analysis
     class HistorySentencePattern(BaseModel):
         sentent_pattern_type: str
         explanation: str
@@ -322,24 +325,24 @@ English essays: {history_content}
     class HistoryWritingPatternAnalysis(BaseModel):
         history_sentence_patterns: list[HistorySentencePattern]
 
-    # 構建 response
+    # Prepare payload for sentence-pattern analysis
     messages=[
         {"role": "user", "content": user_prompt},
     ]
 
-    # 發送請求
+    # Request the model to analyze sentence patterns
     history_writing_pattern_analysis = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-5-nano-2025-08-07",
         # reasoning_effort="low",
         messages=messages,
         response_format=HistoryWritingPatternAnalysis
     )
 
-    # 取得結果: 歷史 Sentence Pattern & Grammar Feature
+    # Extract sentence-pattern data from the response
     history_sentence_patterns = history_writing_pattern_analysis.choices[0].message.parsed.history_sentence_patterns
 
 
-    # Prompt: 提取當前寫作的Patterns
+    # Build prompt to extract grammar features for each pattern
     user_prompt = f"""#Instruction:
 You are a writing analysis AI designed to help users understand their writing style. Your task is to analyze the provided English essays and identify sentence patterns. You should provide detailed explanations for each identified category and include examples from the text.
 # Task Details:
@@ -362,7 +365,7 @@ English essays: {current_writing_content}
 2. Returning your analysis results in the output structure, ensuring each section is thorough and well-explained.
 """
 
-    # 輸出格式
+    # Response schema for sentence patterns in the current essay
     class CurrentSentencePattern(BaseModel):
         sentent_pattern_type: str
         explanation: str
@@ -373,23 +376,23 @@ English essays: {current_writing_content}
     class CurrentWritingPatternAnalysis(BaseModel):
         current_sentence_patterns: list[CurrentSentencePattern]
 
-    # 構建 response
+    # Prepare payload for current-essay sentence-pattern analysis
     messages=[
         {"role": "user", "content": user_prompt},
     ]
 
-    # 發送請求
+    # Request sentence-pattern analysis for the current essay
     current_writing_pattern_analysis = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-5-nano-2025-08-07",
         # reasoning_effort="low",
         messages=messages,
         response_format=CurrentWritingPatternAnalysis
     )
 
-    # 取得結果: 當前 Sentence Pattern & Grammar Feature
+    # Extract current sentence-pattern data
     current_sentence_patterns = current_writing_pattern_analysis.choices[0].message.parsed.current_sentence_patterns
 
-    # 格式化 Sentence Pattern 的輸出
+    # Helper to format sentence-pattern output
     def format_common_sentence_patterns(patterns: List) -> str:
         class SentencePattern(BaseModel):
             sentent_pattern_type: str
@@ -411,12 +414,11 @@ English essays: {current_writing_content}
             )
         return "\n".join(output)
     
-    # 格式化歷史 & 當前 Sentence Patterns
+    # Format pattern summaries for history and current essays
     formatted_history_patterns = format_common_sentence_patterns(history_sentence_patterns)
     formatted_current_patterns = format_common_sentence_patterns(current_sentence_patterns)
 
-    # 選擇預測句的 Sentence Pattern
-    # Prompt: 根據寫作目的，取得應該使用的 Sentence Pattern
+    # Build prompt to select the most suitable sentence pattern
     user_prompt = f"""# Instruction:
 Instruction: You are an advanced AI assistant with expertise in English writing. Your task is to select the appropriate sentence pattern for the predicted sentence from both the history and current sentence pattern lists based on the essay content and the purpose of writing the predicted sentence. Please think step by step!
 
@@ -436,7 +438,7 @@ History Sentence Pattern List:
 # You Task:
 - Please compare the sentence patterns used in the current essay and the past essays, and based on the purpose of the predicted sentence, determine which sentence pattern should be used for crafting the predicted sentence."""
 
-    # 輸出格式
+    # Response schema for the selected sentence pattern
     class PredictSentencePattern(BaseModel):
         sentent_pattern_type: str
         explanation: str
@@ -444,43 +446,43 @@ History Sentence Pattern List:
         pattern: str
         function: str
 
-    # 構建 response
+    # Prepare payload for sentence-pattern selection
     messages=[
         {"role": "user", "content": user_prompt}
     ]
 
-    # 發送請求
+    # Ask the model to choose the most suitable sentence pattern
     predict_sntence_pattern = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-5-nano-2025-08-07",
         # reasoning_effort="low",
         messages=messages,
         response_format=PredictSentencePattern,
-        n=5 # 生成五個句型模式
+        n=5  # Request five alternative sentence-pattern suggestions
     )
 
-    # 取得結果: 五個句型模式
+    # Format the sentence-pattern options returned by the model
     predict_sntence_pattern_list = []
     for i, choice in enumerate(predict_sntence_pattern.choices):
         parsed = choice.message.parsed        
-        # 使用屬性存取方式提取資訊
+        # Extract individual fields for clarity
         type_info = f"Type: {parsed.sentent_pattern_type}"
         explanation = f"Explanation: {parsed.explanation}"
         example = f"Example: {parsed.example}"
         pattern = f"Pattern: {parsed.pattern}"
         function = f"Function: {parsed.function}"
-        # 格式化字串
+        # Combine the details into a readable block
         formatted_string = f"{type_info}\n{explanation}\n{example}\n{pattern}\n{function}"
-        # 將格式化後的字串加入列表
+        # Store formatted option for later voting
         predict_sntence_pattern_list.append(formatted_string)
 
 
-    # 投票: 最符合當前寫作目的的 Sentence Pattern    
-    # 將所有句型模式做為選項加入列表中
+    # Build voting prompt for sentence-pattern selection
+    # Prepare payload for writing-pattern analysis
     predict_sntence_pattern_options_list = "\n".join([f"{i+1}. {response}" for i, response in enumerate(predict_sntence_pattern_list)])
 
-    # Voting Prompt: 根據當前文章摘要選擇最合適的句型模式
+    # Request writing-pattern analysis from the model
     user_prompt = f"""# Instruction: 
-You are an advanced AI assistant with expertise in English writing. Your task is to choose the sentence pattern that the predicted sentence should use from the five sentence pattern options according to the English essay and the purpose of writing the predicted sentence.
+You are an advanced AI assistant with expertise in English writing. Your task is to choose the sentence pattern that the predicted sentence should use from the Three sentence pattern options according to the English essay and the purpose of writing the predicted sentence.
 
 # Input Structure: 
 The user provides the essay's content:
@@ -489,56 +491,56 @@ Essay Content:
 
 The purpose of writing the predicted sentence : {best_match_writing_purpose}
 
-Five Sentence Pattern Options: {predict_sntence_pattern_options_list}
+Three Sentence Pattern Options: {predict_sntence_pattern_options_list}
 
 # Your Task:
 - Review the content of the essay and the stated purpose of the predicted sentence.
-- Carefully analyze the five provided sentence pattern options.
+- Carefully analyze the Three provided sentence pattern options.
 - Select the sentence pattern that aligns best with the essay’s context and the goal of the predicted sentence.(Respond with a number: 1, 2, 3, 4, or 5)
 - Ensure that the chosen sentence pattern enhances the overall clarity, flow, and coherence of the essay.
 - Provide a brief explanation of why you chose the selected sentence pattern."""
     user_prompt = user_prompt.replace("[PREDICTED SENTENCE]", "")
 
-    # 輸出格式
+    # Response schema for the selected sentence pattern
     class BestMatchSentencePattern(BaseModel):
         best_match_sentence_pattern: str
         best_match_sentence_pattern_reason: str
 
-    # 構建 response
+    # Prepare payload for sentence-pattern voting
     messages=[
         {"role": "user", "content": user_prompt}
     ]
 
-    # 發送請求
+    # Ask the model to vote on the best sentence pattern
     response = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-5-nano-2025-08-07",
         # reasoning_effort="low",
         messages=messages,
         response_format=BestMatchSentencePattern,
-        n=5 # 生成五個句型模式
+        n=5  # Request five votes for diversity
     )
 
-    # 取得結果: 輸出票選結果
+    # Collect vote results for later analysis
     best_match_sentence_pattern_vote_results = []
     best_match_sentence_pattern_vote_results_reason = []
     for choice in response.choices:
         best_match_sentence_pattern_vote_results.append(choice.message.parsed.best_match_sentence_pattern)
         best_match_sentence_pattern_vote_results_reason.append(choice.message.parsed.best_match_sentence_pattern_reason)
-        # print("編號:" + choice.message.parsed.best_match_sentence_pattern)
-        # print("理由:" + choice.message.parsed.best_match_sentence_pattern_reason + "\n")
+        # Debug prints removed to avoid non-English output
+        # Debug prints removed to avoid non-English output
 
-    # 計算票數
+    # Determine the winning sentence-pattern option
     best_match_sentence_pattern_vote_counts = Counter(best_match_sentence_pattern_vote_results)
     best_match_sentence_pattern_highest_vote_result = max(best_match_sentence_pattern_vote_counts.values())
     best_match_sentence_pattern_winning_options = [option for option, count in best_match_sentence_pattern_vote_counts.items() if count == best_match_sentence_pattern_highest_vote_result]
 
-    # 確認是否有平票
+    # Handle ties by triggering a tie-break vote
     if len(best_match_sentence_pattern_winning_options) > 1:
-        # 平票處理
+        # Prepare tie-breaking options for the sentence-pattern vote
         tie_options = [predict_sntence_pattern_list[int(option) - 1] for option in best_match_sentence_pattern_winning_options]
         tie_options_list = "\n".join([f"{i+1}. {response}" for i, response in enumerate(tie_options)])
 
-        # Voting Prompt: 從平票選項中重新投票
+        # Build tie-breaking prompt for sentence-pattern selection
         tie_prompt = f"""# Instruction: 
     You are an advanced AI assistant with expertise in English writing. Your task is to choose the sentence pattern that the predicted sentence should use from the two sentence pattern options according to the English essay and the purpose of writing the predicted sentence.
 
@@ -559,21 +561,21 @@ Five Sentence Pattern Options: {predict_sntence_pattern_options_list}
     - Provide a brief explanation of why you chose the selected sentence pattern."""
         user_prompt = user_prompt.replace("[PREDICTED SENTENCE]", "")
 
-        # 構建 response
+        # Prepare payload for tie-break voting
         tie_messages = [
             {"role": "user", "content": tie_prompt}
         ]
 
-        # 發送請求
+        # Request tie-break voting from the model
         tie_response = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
+            model="gpt-5-nano-2025-08-07",
             # reasoning_effort="low",
             messages=tie_messages,
             response_format=BestMatchSentencePattern,
-            n=3
+            n=5
         )
 
-        # 取得結果: 再次票選結果
+        # Collect tie-break vote results
         tie_vote_results = []
         tie_vote_reason = []
         for choice in tie_response.choices:
@@ -581,7 +583,7 @@ Five Sentence Pattern Options: {predict_sntence_pattern_options_list}
             tie_vote_reason.append(choice.message.parsed.best_match_sentence_pattern_reason)
 
 
-        # 再次計算票數
+        # Determine the winning option from the tie-break vote
         tie_vote_counts = Counter(tie_vote_results)
         tie_highest_vote_result = max(tie_vote_counts.values())
         tie_winning_options = [option for option, count in tie_vote_counts.items() if count == tie_highest_vote_result][0]
@@ -590,14 +592,14 @@ Five Sentence Pattern Options: {predict_sntence_pattern_options_list}
     else:
         best_match_sentence_pattern_winning_option = best_match_sentence_pattern_winning_options[0]
         best_match_sentence_pattern = predict_sntence_pattern_list[int(best_match_sentence_pattern_winning_option) - 1]
-        # print(f"得票最高的選項編號: {best_match_sentence_pattern_winning_option}")
-        # print(f"選項內容: {best_match_sentence_pattern}")
+        # Debug prints removed to avoid non-English output
+        # Debug prints removed to avoid non-English output
     
     return best_match_sentence_pattern
 
-# 提取Writing Pattern
+# Identify overall writing patterns from historical essays
 def identify_writing_pattern(history_content):
-    # Prompt: 提取歷史寫作紀錄的Patterns
+    # Build prompt for writing pattern analysis
     user_prompt = f"""# Instruction:
 You are a writing analysis AI designed to help users understand their writing style. Your task is to generate user's writing style based on the user's provided English essays.
 
@@ -627,7 +629,7 @@ Several English essays:
 1. Analyze the provided essays to identify writing patterns and features.
 2. Return your analysis results in the output structure, ensuring each section is thorough and well-explained."""
     
-    # 輸出格式
+    # Format writing pattern descriptions
     class WritingPattern(BaseModel):
         writing_pattern_type: str
         explanation: str
@@ -642,13 +644,13 @@ Several English essays:
     class WritingPatternAnalysis(BaseModel):
         writing_patterns: list[WritingPattern]
         writing_features: list[WritingFeature]
-    # 構建 response
+    # Format writing feature descriptions
     messages=[
         {"role": "user", "content": user_prompt},
     ]
-    # 發送請求
+    # Build prompt for generating the predicted sentence
     writing_pattern_analysis = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
+            model="gpt-5-nano-2025-08-07",
             # reasoning_effort="low",
             messages=messages,
             response_format=WritingPatternAnalysis,
@@ -656,7 +658,7 @@ Several English essays:
     writing_patterns = writing_pattern_analysis.choices[0].message.parsed.writing_patterns
     writing_features = writing_pattern_analysis.choices[0].message.parsed.writing_features
 
-    # 格式化 Writing Pattern
+    # Format writing pattern descriptions
     writing_patterns_formatted = []
     for idx, pattern in enumerate(writing_patterns, start=1):
         writing_patterns_formatted.append(
@@ -668,7 +670,7 @@ Several English essays:
         )
     writing_patterns_formatted_output = "\n".join(writing_patterns_formatted)
 
-    # 格式化 Writing Feature
+    # Format writing feature descriptions
     writing_features_formatted = []
     for idx, feature in enumerate(writing_features, start=1):
         writing_features_formatted.append(
@@ -684,9 +686,9 @@ Several English essays:
     
     return writing_patterns_formatted_output, writing_features_formatted_output
 
-# 預測句子
+# Predict the final sentence using collected context
 def predict_sentence(title, context_info, current_writing_content, best_match_writing_purpose, answer_from_current, answer_from_history, best_match_sentence_pattern, writing_patterns_formatted_output, writing_features_formatted_output):
-    # Prompt: 根據提取出的資訊進行預測
+    # Build prompt for generating the predicted sentence
     user_prompt = f"""# Instruction:
 You are an AI writing assistant specialized in predicting a sentence within a user’s English essay. Your task is to generate ONE predicted sentence based on the provided full context. The sentence must align with the essay's **core topic**, as defined by the Title and Context, and must not deviate from the main subject. Please think step by step!
 
@@ -756,33 +758,77 @@ Enhancement Details:
 
 8. **Output a SINGLE Sentence Only.**"""
 
-    # 輸出格式
+    # Response schema for the predicted sentence
     class PredictSentence(BaseModel):
         predict_sentence: str
-    # 構建 response
+    # Prepare payload for final sentence generation
     messages=[
         {"role": "user", "content": user_prompt}
     ]
-    # 發送請求
+    # Request the final predicted sentence from the model
     predict_sentence = client.beta.chat.completions.parse(
-        model="gpt-4o-mini", #o3-mini #gpt-4o-mini
+        model="gpt-5-2025-08-07", #o3-mini #gpt-4o-mini
         # reasoning_effort="low",
         messages=messages,
         response_format=PredictSentence
     )
-    # 回傳結果
+    # Extract the generated sentence from the response
     final_predict_sentence = predict_sentence.choices[0].message.parsed.predict_sentence
     
     return final_predict_sentence, user_prompt
 
-# 執行預測
-async def get_predict_sentence(current_essay_content: str, history_essay_content: str, images_info: List[dict], title: str) -> str:
-    start_time = time.time()  # 開始時間
+# prediction check
+def get_or_create_sentence_pattern(sid, eid, current_content, history_content, purpose):
+    connection = None
     try:
-        # 設定超時限制
-        timeout = 160  # 秒數
+        connection = pymysql.connect(**DB_CONFIG)
+        with connection.cursor() as cursor:
+            sql = "SELECT pattern_result FROM sentence_patterns WHERE sid=%s AND eid=%s"
+            cursor.execute(sql, (sid, eid))
+            row = cursor.fetchone()
+            print(f"[DEBUG] SELECT result row={row}")
+            if row:
+                # Handle dict atau tuple
+                if isinstance(row, dict):
+                    return row.get("pattern_result")
+                elif isinstance(row, (list, tuple)):
+                    return row[0]
+                else:
+                    return row
 
-        # 將圖片資訊整合成字串
+            # Generate a new pattern when the cache misses
+            result = identify_sentence_pattern(
+                current_content,
+                history_content,
+                purpose
+            )
+
+            # simpan ke DB
+            insert_sql = """
+                INSERT INTO sentence_patterns (sid, eid, pattern_result)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE pattern_result=VALUES(pattern_result)
+            """
+            cursor.execute(insert_sql, (sid, eid, result))
+            connection.commit()
+            return result
+
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        raise RuntimeError(f"DB error in get_or_create_sentence_pattern: {str(e)}")
+    finally:
+        if connection:
+            connection.close()
+            
+# Execute prediction
+async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, history_essay_content: str, images_info: List[dict], title: str) -> str:
+    start_time = time.time()  # Start time
+    try:
+         # Set timeout limit
+        timeout = 100  # seconds
+
+          # Combine image information into a string
         context_info = ""
         for idx, img in enumerate(images_info, 1):
             context_info += f"Context Infomation {idx}:\n"
@@ -790,64 +836,67 @@ async def get_predict_sentence(current_essay_content: str, history_essay_content
             context_info += f"Description: {img['description']}\n\n"
 
         async def predict_with_timeout():
-            # 1. 辨識寫作目的
+            # 1. Identify writing purposes from the current essay
             purpose_start = time.time()
             writing_purposes_list = identify_writing_purpose(current_essay_content)
             if not writing_purposes_list:
-                raise ValueError("無法識別寫作目的")
-            print(f"辨識寫作目的花費時間: {time.time() - purpose_start:.2f} 秒")
+                raise ValueError("Failed to identify a writing purpose for the current essay.")
+            print(f"[DEBUG] Writing-purpose identification took {time.time() - purpose_start:.2f} s")
 
-            # 2. 投票選出最佳寫作目的
+            # 2. Vote for the best writing purpose
             vote_start = time.time()
             best_match_writing_purpose, error_msg = vote_writing_purpose(current_essay_content, writing_purposes_list)
             if error_msg:
-                raise ValueError(f"投票過程發生錯誤: {error_msg}")
-            print(f"投票選出最佳寫作目的花費時間: {time.time() - vote_start:.2f} 秒")
+                raise ValueError(f"Voting error while selecting writing purpose: {error_msg}")
+            print(f"[DEBUG] Writing-purpose voting took {time.time() - vote_start:.2f} s")
 
-            # 3. 檢索相關資訊
+            # 3. Generate research questions for retrieval
             query_start = time.time()
             query_list = generate_question(current_essay_content, best_match_writing_purpose)
             if not query_list:
-                raise ValueError("無法生成問題")
-            print(f"生成問題花費時間: {time.time() - query_start:.2f} 秒")
+                raise ValueError("Failed to generate guiding questions for retrieval.")
+            print(f"[DEBUG] Question generation took {time.time() - query_start:.2f} s")
 
-            # 4. 從歷史文章獲取答案
+            # 4. Gather answers from historical essays
             history_start = time.time()
             answer_from_history_list = ""
             for query in query_list:
                 query_answer_from_history = await answer_from_history(query)
                 if query_answer_from_history != "I am sorry but I am unable to answer this question given the provided data.":
                     answer_from_history_list += f"Question: {query}\nAnswer: {query_answer_from_history}\n\n"
-            print(f"從歷史文章獲取答案花費時間: {time.time() - history_start:.2f} 秒")
+            print(f"[DEBUG] Historical retrieval took {time.time() - history_start:.2f} s")
 
-            # 5. 從當前文章獲取答案
+            # 5. Gather answers from the current essay
             current_start = time.time()
             answer_from_current_list = ""
             for query in query_list:
                 query_answer_from_current = answer_from_current(current_essay_content, query)
                 if query_answer_from_current != "No related information.":
                     answer_from_current_list += f"Question: {query}\nAnswer: {query_answer_from_current}\n\n"
-            print(f"從當前文章獲取答案花費時間: {time.time() - current_start:.2f} 秒")
+            print(f"[DEBUG] Current-essay retrieval took {time.time() - current_start:.2f} s")
 
-            # 6. 提取句型模式
+            # 6. Retrieve or create the best sentence pattern (using SQL cache)
             pattern_start = time.time()
-            best_match_sentence_pattern = identify_sentence_pattern(
-                current_essay_content, 
-                history_essay_content, 
-                best_match_writing_purpose
+            best_match_sentence_pattern = get_or_create_sentence_pattern(
+                sid=sid,      # student id
+                eid=eid,            # eid
+                current_content=current_essay_content,
+                history_content=history_essay_content,
+                purpose=best_match_writing_purpose
             )
-            if not best_match_sentence_pattern:
-                raise ValueError("無法識別句型模式")
-            print(f"識別句型模式花費時間: {time.time() - pattern_start:.2f} 秒")
 
-            # 7. 提取寫作風格
+            if not best_match_sentence_pattern:
+                raise ValueError("Unable to obtain a sentence pattern for the prediction step.")
+            print(f"[DEBUG] Sentence-pattern lookup took {time.time() - pattern_start:.2f} s")
+
+            # 7. Analyze writing patterns and features
             style_start = time.time()
             writing_patterns_formatted_output, writing_features_formatted_output = identify_writing_pattern(history_essay_content)
             if not writing_patterns_formatted_output or not writing_features_formatted_output:
-                raise ValueError("無法識別寫作風格")
-            print(f"識別寫作風格花費時間: {time.time() - style_start:.2f} 秒")
+                raise ValueError("Failed to identify writing patterns or features for the student.")
+            print(f"[DEBUG] Writing-style analysis took {time.time() - style_start:.2f} s")
 
-            # 8. 預測句子
+            # 8. Generate the predicted sentence
             predict_start = time.time()
             final_predict_sentence, user_prompt = predict_sentence(
                 title,
@@ -861,32 +910,32 @@ async def get_predict_sentence(current_essay_content: str, history_essay_content
                 writing_features_formatted_output
             )
             if not final_predict_sentence:
-                raise ValueError("無法生成預測句子")
-            print(f"生成預測句子花費時間: {time.time() - predict_start:.2f} 秒")
+                raise ValueError("The language model did not return a predicted sentence.")
+            print(f"[DEBUG] Sentence prediction took {time.time() - predict_start:.2f} s")
 
-            # await asyncio.sleep(11)  # 模擬超時
+            # Optional debugging helpers retained for future analysis
             # final_predict_sentence = "test"
             # user_prompt = "test"
 
             return final_predict_sentence, user_prompt
 
-        # 使用 asyncio.wait_for 設定超時
+        # Run the prediction workflow with a timeout to prevent long-running requests
         final_predict_sentence, user_prompt = await asyncio.wait_for(predict_with_timeout(), timeout=timeout)
 
         total_time = time.time() - start_time
-        print(f"\n預測流程總共花費時間: {total_time:.2f} 秒")
+        print(f"[DEBUG] Total prediction time: {total_time:.2f} s")
 
         return final_predict_sentence, user_prompt
 
     except asyncio.TimeoutError:
         total_time = time.time() - start_time
-        print(f"預測超時，總共執行時間: {total_time:.2f} 秒")
-        raise TimeoutError("預測超時，請稍後再試。")
+        print(f"[WARNING] Prediction timed out after {total_time:.2f} s")
+        raise TimeoutError("Prediction workflow exceeded the allowed time.")
 
     except Exception as e:
         total_time = time.time() - start_time
-        print(f"預測失敗，總共執行時間: {total_time:.2f} 秒")
-        print(f"預測句子時發生錯誤: {str(e)}")
+        print(f"[ERROR] Prediction failed after {total_time:.2f} s")
+        print(f"[ERROR] Failure reason: {str(e)}")
         raise e
 
 
