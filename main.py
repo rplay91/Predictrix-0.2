@@ -84,6 +84,10 @@ async def hw_writing_instruct(request: Request):
 async def teacher_index(request: Request):
     return templates.TemplateResponse("teacher_index.html", {"request": request})
 
+@app.get("/predict_test", response_class=HTMLResponse)
+async def predict_test(request: Request):
+    return templates.TemplateResponse("predict_test.html", {"request": request})
+
 
 # Login request payload
 class LoginData(BaseModel):

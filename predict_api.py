@@ -5,8 +5,7 @@ import asyncio
 import time
 import re
 from collections import Counter
-from datetime import datetime
-from NodeRAG import NodeRag, NodeConfig, NodeSearch
+from graphRAG.global_search import search_graph
 import pymysql
 
 from api_config import GPT_API_KEY
@@ -14,10 +13,10 @@ from db_config import DB_CONFIG
 client = OpenAI(api_key=GPT_API_KEY)
 
 
-# Initialize NodeRAG
-config = NodeConfig.from_main_folder(r"D:/Master-Degree/Predictrix-0.2/")
-search_engine = NodeSearch(config)
-
+## add the reasoning Prompt for the component
+# generate the reasoning from history essays
+# construct the output to Pydantic
+# 
 
 # Identify the writing purpose
 def identify_writing_purpose(current_writing_content):
@@ -90,6 +89,96 @@ def _resolve_vote_option(selection: str, options: List[str]) -> Optional[int]:
             return idx
 
     return None
+
+# ============================================
+# Vocabulary Extraction (Inline Component)
+# ============================================
+
+def extract_vocabulary_features(current_writing_content: str):
+    """Extracts vocabulary and common words from current essay using step-back reasoning."""
+
+    user_prompt = f"""# Instruction:
+You are an advanced AI assistant specialized in English writing analysis.
+Your task is to extract the key vocabulary characteristics from a student's English essay.
+
+# Your Task:
+1. Identify and return **EXACTLY 5** most frequently used topic-related vocabulary words that represent the essay’s subject domain.
+2. Identify and return **EXACTLY 5** common words that appear frequently and reflect the student's writing style.
+3. Do not include essay titles or themes; focus only on the essay body text.
+4. If more than 5 are possible, choose the **most representative 5 words only**.
+5. The final JSON output **must not contain more than 5 words per list**.
+
+# Input:
+Essay Content:
+{current_writing_content}
+
+# Output format (strictly JSON):
+{{
+  "vocabulary": ["word1", "word2", "word3", "word4", "word5"],
+  "common_words": ["wordA", "wordB", "wordC", "wordD", "wordE"]
+}}
+"""
+
+
+    class VocabularyExtraction(BaseModel):
+        vocabulary: List[str]
+        common_words: List[str]
+
+    # Send Request (Initial Extraction)
+    messages = [{"role": "user", "content": user_prompt}]
+
+    response = client.beta.chat.completions.parse(
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
+        messages=messages,
+        response_format=VocabularyExtraction,
+        n=1
+    )
+
+    base_extraction = response.choices[0].message.parsed
+
+    # Step-Back Reflection Prompt
+    step_back_prompt = f"""# Step-Back Reflection:
+You are a writing reflection assistant.
+Review the extracted vocabulary lists below and ensure they accurately represent the essay's lexical field and word usage.
+
+# Task:
+1. If any words are too generic or irrelevant, replace or refine them.
+2. Ensure the vocabulary truly fits the essay’s domain, tone, and topic.
+
+Essay Content:
+{current_writing_content}
+
+Initial Extraction:
+Vocabulary: {base_extraction.vocabulary}
+Common Words: {base_extraction.common_words}
+
+Return revised output strictly in this JSON format:
+
+{{
+  "vocabulary": ["word1", "word2", ...],
+  "common_words": ["wordA", "wordB", ...]
+}}
+"""
+
+    # Send Step-Back Request (Refinement)
+    response_refined = client.beta.chat.completions.parse(
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
+        messages=[{"role": "user", "content": step_back_prompt}],
+        response_format=VocabularyExtraction,
+        n=1
+    )
+
+    refined_extraction = response_refined.choices[0].message.parsed
+
+    result = {
+    "vocabulary": refined_extraction.vocabulary[:5],
+    "common_words": refined_extraction.common_words[:5]
+    }
+
+
+    return result
 
 
 def vote_writing_purpose(current_writing_content, writing_purposes_list):
@@ -221,7 +310,7 @@ Two Purposes of Writing:{re_writing_purposes_options_list}
 # Generate queries (max 3)
 def generate_question(current_writing_content, best_match_writing_purpose):
     user_prompt = f"""# Instruction:
-You are an advanced AI assistant with expertise in analyzing English writing. Your task is to improve the predicted sentence in an English essay by formulating effective database queries. The predicted sentence has a specific purpose of writing, which will be provided as input.  Your ultimate goal is to generate three targeted, insightful questions that can retrieve relevant and useful information from the database to refine the predicted sentence.
+You are an advanced AI assistant with expertise in analyzing English writing. Your task is to improve the predicted sentence in an English essay by formulating effective database queries. The predicted sentence has a specific purpose of writing, which will be provided as input.  Your ultimate goal is to generate EXACTLY THREE targeted, insightful questions that can retrieve relevant and useful information from the database to refine the predicted sentence.
 
 # Input Structure:
 The user provides the essay's content:
@@ -234,9 +323,8 @@ The purpose of writing predicted sentence: {best_match_writing_purpose}
 
 # Your Task:
 1. Understand the logical flow of the essay and the role of the predicted sentence.
-2. Based on the purpose of writing predicted sentence, produce three clear and concise questions.
-3. Each question should be crafted to extract specific information from the database that will help enhance the predicted sentence's effectiveness.
-4. Think carefully about what aspects of the writing need further research, and ensure that your questions are directly aligned with the writing purpose."""
+2. Based on the purpose of writing predicted sentence, produce EXACTLY THREE short, concrete, and database-friendly questions.
+3. The questions should focus on retrieving factual or descriptive information, not literary analysis."""
 
     # Response schema for generated questions
     class WritingQuerys(BaseModel):
@@ -275,18 +363,20 @@ Question: {query}
 3. If the Knowledge Graph subgraph does not contain the requested information, respond strictly with: "No related information."
 4. Do not include external knowledge or assumptions beyond what is present in the provided Knowledge Graph subgraph.
 """
-    # NodeRAG retrieval search
+    # GraphRAG retrieval search
     try:
         # Kirim user_prompt ke NodeRAG search engine
-        result = search_engine.query(user_prompt)
+        result = await search_graph(user_prompt)
         if result and hasattr(result, "answer"):
             print(result.answer)
             return result.answer
         print("no related info")
         return "No related information."
     except Exception as e:
-        return f"Error during NodeRAG search: {str(e)}"
-
+        return f"Error during RAG search: {str(e)}"
+    
+    ## REASONING COMPONENT ? ###
+ 
 # Answer questions using the current essay content
 def answer_from_current(current_writing_content, query):
     user_prompt = f"""
@@ -729,10 +819,24 @@ Several English essays:
     return writing_patterns_formatted_output, writing_features_formatted_output
 
 # Predict the final sentence using collected context
-def predict_sentence(title, context_info, current_writing_content, best_match_writing_purpose, answer_from_current, answer_from_history, best_match_sentence_pattern, writing_patterns_formatted_output, writing_features_formatted_output):
+def predict_sentence(
+    title,
+    context_info,
+    current_writing_content,
+    best_match_writing_purpose,
+    answer_from_current,
+    answer_from_history,
+    best_match_sentence_pattern,
+    writing_patterns_formatted_output,
+    writing_features_formatted_output,
+    vocabulary_info  # new
+):
     # Build prompt for generating the predicted sentence
     user_prompt = f"""# Instruction:
-You are an AI writing assistant specialized in predicting a sentence within a user’s English essay. Your task is to generate ONE predicted sentence based on the provided full context. The sentence must align with the essay's **core topic**, as defined by the Title and Context, and must not deviate from the main subject. Please think step by step!
+You are an AI writing assistant specialized in predicting a sentence within a user’s English essay. 
+Your task is to generate ONE predicted sentence based on the provided full context. 
+The sentence must align with the essay's **core topic**, as defined by the Title and Context, and must not deviate from the main subject. 
+Please think step by step!
 
 # Input Detail:
 - Essay Title: The title defines the essay's core topic and sets the overall direction.
@@ -743,6 +847,7 @@ You are an AI writing assistant specialized in predicting a sentence within a us
 - Writing Features: The stylistic and linguistic tone.
 - Sentence Pattern: The designated grammatical structure of the sentence.
 - Enhancement Details: Supplementary writing details, drawn from current and past writing drafts.
+- Extracted Vocabulary Context: Words and expressions frequently appearing in the essay, reflecting tone and lexical consistency.
 
 # Input Structure:
 Essay Title:
@@ -771,10 +876,14 @@ Enhancement Details:
 
 {answer_from_history}
 
+Extracted Vocabulary Context:
+Vocabulary Words: {', '.join(vocabulary_info.get('vocabulary', []))}
+Common Words: {', '.join(vocabulary_info.get('common_words', []))}
+
 # Your Task:
 1. **Focus on the Core Topic:**
-   - Ensure the predicted sentence directly supports the essay's core topic as defined by the Title and Contextual Information. (e.g., location, people involved, names of food, physical landmarks, etc.).
-   - Identify the role of the predicted sentence (e.g., introducing an idea, providing evidence, offering a transition, or summarizing a point).
+   - Ensure the predicted sentence directly supports the essay's core topic as defined by the Title and Contextual Information.
+   - Identify the role of the predicted sentence (introducing an idea, providing evidence, offering a transition, or summarizing a point).
    - Avoid introducing unrelated or tangential ideas.
 
 2. **Enhance Logical Flow:**
@@ -786,38 +895,43 @@ Enhancement Details:
    - Check for semantic similarity (not just surface text).
 
 4. **Preserve Logical Accuracy:**
-   - The predicted sentence MUST NOT introduce false or contradictory information (e.g., misidentifying a restaurant as a cafe, mischaracterizing a door as a mural).
+   - The predicted sentence MUST NOT introduce false or contradictory information.
 
 5. **Respect Contextual Consistency:**
-   - Align your sentence with the setting, tone, and real-world implications established by the essay. Use the contextual information (keywords + description) to guide your tone and content.
+   - Align your sentence with the setting, tone, and real-world implications established by the essay.
+   - Use the contextual information and extracted vocabulary to maintain lexical cohesion.
 
 6. **Natural Integration:**
-   - Your sentence should enhance the flow of the paragraph, connect ideas logically, and sound natural.
+   - The sentence should enhance paragraph flow, connect ideas logically, and sound natural.
 
-7. **Maintain Stylistic Consistency**:
-   - The predicted sentence must match the tone and stylistic level of the surrounding content (e.g., avoid shifting from factual to poetic or from neutral to emotional).
-   - Do not use overly figurative or metaphorical language unless such style is already present in the preceding or following sentences.
+7. **Maintain Stylistic Consistency:**
+   - Match tone and lexical choices used in the essay.
+   - Avoid figurative or emotional shifts unless already present.
 
-8. **Output a SINGLE Sentence Only.**"""
+8. **Output a SINGLE Sentence Only.**
+"""
 
     # Response schema for the predicted sentence
     class PredictSentence(BaseModel):
         predict_sentence: str
-    # Prepare payload for final sentence generation
-    messages=[
-        {"role": "user", "content": user_prompt}
-    ]
-    # Request the final predicted sentence from the model
+
+    # Prepare payload
+    messages = [{"role": "user", "content": user_prompt}]
+
+    # Send request to model
     predict_sentence = client.beta.chat.completions.parse(
-        model="gpt-5", #o3-mini #gpt-4o-mini
+        model="gpt-5",  # or gpt-4o-mini, etc.
         reasoning_effort="low",
         messages=messages,
         response_format=PredictSentence
     )
-    # Extract the generated sentence from the response
+
+    # Extract predicted sentence
     final_predict_sentence = predict_sentence.choices[0].message.parsed.predict_sentence
-    
+
     return final_predict_sentence, user_prompt
+
+
 
 # prediction check
 def get_or_create_sentence_pattern(sid, eid, current_content, history_content, purpose):
@@ -867,10 +981,9 @@ def get_or_create_sentence_pattern(sid, eid, current_content, history_content, p
 async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, history_essay_content: str, images_info: List[dict], title: str) -> str:
     start_time = time.time()  # Start time
     try:
-         # Set timeout limit
         timeout = 100  # seconds
 
-          # Combine image information into a string
+        # Combine image information into a string
         context_info = ""
         for idx, img in enumerate(images_info, 1):
             context_info += f"Context Infomation {idx}:\n"
@@ -878,7 +991,7 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
             context_info += f"Description: {img['description']}\n\n"
 
         async def predict_with_timeout():
-            # 1. Identify writing purposes from the current essay
+            # 1. Identify writing purposes
             purpose_start = time.time()
             writing_purposes_list = identify_writing_purpose(current_essay_content)
             if not writing_purposes_list:
@@ -892,14 +1005,14 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
                 raise ValueError(f"Voting error while selecting writing purpose: {error_msg}")
             print(f"[DEBUG] Writing-purpose voting took {time.time() - vote_start:.2f} s")
 
-            # 3. Generate research questions for retrieval
+            # 3. Generate guiding questions
             query_start = time.time()
             query_list = generate_question(current_essay_content, best_match_writing_purpose)
             if not query_list:
                 raise ValueError("Failed to generate guiding questions for retrieval.")
             print(f"[DEBUG] Question generation took {time.time() - query_start:.2f} s")
 
-            # 4. Gather answers from historical essays
+            # 4. Retrieve answers from history
             history_start = time.time()
             answer_from_history_list = ""
             for query in query_list:
@@ -908,7 +1021,7 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
                     answer_from_history_list += f"Question: {query}\nAnswer: {query_answer_from_history}\n\n"
             print(f"[DEBUG] Historical retrieval took {time.time() - history_start:.2f} s")
 
-            # 5. Gather answers from the current essay
+            # 5. Retrieve answers from current essay
             current_start = time.time()
             answer_from_current_list = ""
             for query in query_list:
@@ -917,28 +1030,33 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
                     answer_from_current_list += f"Question: {query}\nAnswer: {query_answer_from_current}\n\n"
             print(f"[DEBUG] Current-essay retrieval took {time.time() - current_start:.2f} s")
 
-            # 6. Retrieve or create the best sentence pattern (using SQL cache)
+            # 6. Retrieve or create sentence pattern
             pattern_start = time.time()
             best_match_sentence_pattern = get_or_create_sentence_pattern(
-                sid=sid,      # student id
-                eid=eid,            # eid
+                sid=sid,
+                eid=eid,
                 current_content=current_essay_content,
                 history_content=history_essay_content,
                 purpose=best_match_writing_purpose
             )
-
             if not best_match_sentence_pattern:
                 raise ValueError("Unable to obtain a sentence pattern for the prediction step.")
             print(f"[DEBUG] Sentence-pattern lookup took {time.time() - pattern_start:.2f} s")
 
-            # 7. Analyze writing patterns and features
+            # 7. Analyze writing pattern & features
             style_start = time.time()
             writing_patterns_formatted_output, writing_features_formatted_output = identify_writing_pattern(history_essay_content)
             if not writing_patterns_formatted_output or not writing_features_formatted_output:
-                raise ValueError("Failed to identify writing patterns or features for the student.")
+                raise ValueError("Failed to identify writing patterns or features.")
             print(f"[DEBUG] Writing-style analysis took {time.time() - style_start:.2f} s")
 
-            # 8. Generate the predicted sentence
+            # 8️ NEW: Vocabulary Extraction (for lexical insight)
+            vocab_start = time.time()
+            vocabulary_info = extract_vocabulary_features(current_essay_content)
+            print(f"[DEBUG] Vocabulary extraction took {time.time() - vocab_start:.2f} s")
+            print(f"[INFO] Extracted vocabulary info: {vocabulary_info}")
+
+            # 9. Generate predicted sentence
             predict_start = time.time()
             final_predict_sentence, user_prompt = predict_sentence(
                 title,
@@ -949,35 +1067,27 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
                 answer_from_history_list,
                 best_match_sentence_pattern,
                 writing_patterns_formatted_output,
-                writing_features_formatted_output
+                writing_features_formatted_output,
+                vocabulary_info  # ✅ new feature
             )
             if not final_predict_sentence:
-                raise ValueError("The language model did not return a predicted sentence.")
+                raise ValueError("Model did not return a predicted sentence.")
             print(f"[DEBUG] Sentence prediction took {time.time() - predict_start:.2f} s")
-
-            # Optional debugging helpers retained for future analysis
-            # final_predict_sentence = "test"
-            # user_prompt = "test"
 
             return final_predict_sentence, user_prompt
 
-        # Run the prediction workflow with a timeout to prevent long-running requests
+        # Run all steps with timeout protection
         final_predict_sentence, user_prompt = await asyncio.wait_for(predict_with_timeout(), timeout=timeout)
-
-        total_time = time.time() - start_time
-        print(f"[DEBUG] Total prediction time: {total_time:.2f} s")
+        print(f"[DEBUG] Total prediction time: {time.time() - start_time:.2f} s")
 
         return final_predict_sentence, user_prompt
 
     except asyncio.TimeoutError:
-        total_time = time.time() - start_time
-        print(f"[WARNING] Prediction timed out after {total_time:.2f} s")
+        print(f"[WARNING] Prediction timed out after {time.time() - start_time:.2f} s")
         raise TimeoutError("Prediction workflow exceeded the allowed time.")
-
     except Exception as e:
-        total_time = time.time() - start_time
-        print(f"[ERROR] Prediction failed after {total_time:.2f} s")
-        print(f"[ERROR] Failure reason: {str(e)}")
+        print(f"[ERROR] Prediction failed after {time.time() - start_time:.2f} s")
+        print(f"[ERROR] Reason: {str(e)}")
         raise e
 
 

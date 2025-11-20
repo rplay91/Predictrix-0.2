@@ -313,6 +313,14 @@ def reset_hw(eid: str) -> dict:
                 WHERE eid = %s
             """
             cursor.execute(sql, (eid,))
+
+            # Remove any cached sentence pattern linked to this essay so future predictions regenerate it.
+            delete_sql = """
+                DELETE FROM sentence_patterns
+                WHERE eid = %s
+            """
+            cursor.execute(delete_sql, (eid,))
+
             connection.commit()
             
             return {
