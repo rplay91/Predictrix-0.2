@@ -170,7 +170,7 @@ Answer: No related information.
 8. **Output a SINGLE Sentence Only.**
 """,
         # Replace this with the actual output from your LLM application
-        actual_output="In short Halloween brings people together through costumes, trick-or-treating, decorations, and parties to enjoy a creative, spooky, and fun atmosphere.",
+        actual_output="Therefore, Halloween is a celebration where costumes, house decorations, and parties come together with candies and pumpkins so that everyone can feel the spooky but fun atmosphere on October 31.",
         expected_output="In short, Halloween is a symbol that related to horror and mystic event. And it's really popular and fun.",
         #retrieval_context=["All customers are eligible for a 30 day full refund at no extra costs."]
         

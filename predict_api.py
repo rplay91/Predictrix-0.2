@@ -16,7 +16,142 @@ client = OpenAI(api_key=GPT_API_KEY)
 ## add the reasoning Prompt for the component
 # generate the reasoning from history essays
 # construct the output to Pydantic
-# 
+
+
+def reasoning_component(essay_context: str, previous_sentence: str, current_sentence: str) -> dict:
+    """
+    Reasoning Component using Step-Back Prompting 
+    with client.beta.chat.completions.parse()
+    """
+
+    # ==================== ① Step-Back Abstraction ====================
+    class StepBackOutput(BaseModel):
+        abstract_concept: str
+        forward_reasoning: str
+
+    stepback_prompt = f"""
+    You are a Step-Back Reasoning Agent.
+
+    Step back → summarize the abstract idea.
+    Then reason forward → explain logically what should come next.
+
+    Essay Context: {essay_context}
+    Previous Sentence: {previous_sentence}
+    Current Sentence: {current_sentence}
+
+    Respond exactly in this JSON:
+    {{
+      "abstract_concept": "...",
+      "forward_reasoning": "..."
+    }}
+    """
+
+    sb = client.beta.chat.completions.parse(
+        model="gpt-5-nano",
+        messages=[{"role": "user", "content": stepback_prompt}],
+        response_format=StepBackOutput,
+        reasoning_effort="minimal"
+    )
+    stepback_output = sb.choices[0].message.parsed
+
+
+    # ==================== ② Semantic Goal ====================
+    class SemanticGoal(BaseModel):
+        semantic_goal: str
+
+    semantic_prompt = f"""
+    Based on this abstraction:
+    {stepback_output}
+
+    Determine the semantic goal of the next sentence 
+    (continue description, contrast, example, summary, introduce result).
+
+    Respond in JSON:
+    {{
+      "semantic_goal": "..."
+    }}
+    """
+
+    sem = client.beta.chat.completions.parse(
+        model="gpt-5-nano",
+        messages=[{"role": "user", "content": semantic_prompt}],
+        response_format=SemanticGoal,
+        reasoning_effort="minimal"
+    )
+    semantic_goal = sem.choices[0].message.parsed.semantic_goal
+
+
+    # ==================== ③ Writing Style ====================
+    class WritingStyle(BaseModel):
+        writing_style: str
+        tone: str
+        structure: str
+
+    style_prompt = f"""
+    The next sentence must achieve the semantic goal: {semantic_goal}
+
+    Describe:
+    - writing_style
+    - tone
+    - structure
+
+    Respond in JSON:
+    {{
+      "writing_style": "...",
+      "tone": "...",
+      "structure": "..."
+    }}
+    """
+
+    st = client.beta.chat.completions.parse(
+        model="gpt-5-nano",
+        messages=[{"role": "user", "content": style_prompt}],
+        response_format=WritingStyle,
+        reasoning_effort="minimal"
+    )
+    writing_style = st.choices[0].message.parsed
+
+
+    # ==================== ④ Reasoning Summary ====================
+    class SummaryOutput(BaseModel):
+        reasoning_summary: str
+
+    summary_prompt = f"""
+    Summarize all reasoning into a short paragraph:
+    - Abstract Concept: {stepback_output.abstract_concept}
+    - Forward Reasoning: {stepback_output.forward_reasoning}
+    - Semantic Goal: {semantic_goal}
+    - Writing Style: {writing_style}
+
+    Respond in JSON:
+    {{
+      "reasoning_summary": "..."
+    }}
+    """
+
+    summ = client.beta.chat.completions.parse(
+        model="gpt-5-nano",
+        messages=[{"role": "user", "content": summary_prompt}],
+        response_format=SummaryOutput,
+        reasoning_effort="minimal"
+    )
+    reasoning_summary = summ.choices[0].message.parsed.reasoning_summary
+
+
+    # ==================== Final Return ====================
+    return {
+        "stepback_reasoning": {
+            "abstract_concept": stepback_output.abstract_concept,
+            "forward_reasoning": stepback_output.forward_reasoning
+        },
+        "semantic_goal": semantic_goal,
+        "writing_style": {
+            "writing_style": writing_style.writing_style,
+            "tone": writing_style.tone,
+            "structure": writing_style.structure
+        },
+        "reasoning_summary": reasoning_summary
+    }
 
 # Identify the writing purpose
 def identify_writing_purpose(current_writing_content):
@@ -94,91 +229,91 @@ def _resolve_vote_option(selection: str, options: List[str]) -> Optional[int]:
 # Vocabulary Extraction (Inline Component)
 # ============================================
 
-def extract_vocabulary_features(current_writing_content: str):
-    """Extracts vocabulary and common words from current essay using step-back reasoning."""
+# def extract_vocabulary_features(current_writing_content: str):
+#     """Extracts vocabulary and common words from current essay using step-back reasoning."""
 
-    user_prompt = f"""# Instruction:
-You are an advanced AI assistant specialized in English writing analysis.
-Your task is to extract the key vocabulary characteristics from a student's English essay.
+#     user_prompt = f"""# Instruction:
+# You are an advanced AI assistant specialized in English writing analysis.
+# Your task is to extract the key vocabulary characteristics from a student's English essay.
 
-# Your Task:
-1. Identify and return **EXACTLY 5** most frequently used topic-related vocabulary words that represent the essay’s subject domain.
-2. Identify and return **EXACTLY 5** common words that appear frequently and reflect the student's writing style.
-3. Do not include essay titles or themes; focus only on the essay body text.
-4. If more than 5 are possible, choose the **most representative 5 words only**.
-5. The final JSON output **must not contain more than 5 words per list**.
+# # Your Task:
+# 1. Identify and return **EXACTLY 5** most frequently used topic-related vocabulary words that represent the essay’s subject domain.
+# 2. Identify and return **EXACTLY 5** common words that appear frequently and reflect the student's writing style.
+# 3. Do not include essay titles or themes; focus only on the essay body text.
+# 4. If more than 5 are possible, choose the **most representative 5 words only**.
+# 5. The final JSON output **must not contain more than 5 words per list**.
 
-# Input:
-Essay Content:
-{current_writing_content}
+# # Input:
+# Essay Content:
+# {current_writing_content}
 
-# Output format (strictly JSON):
-{{
-  "vocabulary": ["word1", "word2", "word3", "word4", "word5"],
-  "common_words": ["wordA", "wordB", "wordC", "wordD", "wordE"]
-}}
-"""
-
-
-    class VocabularyExtraction(BaseModel):
-        vocabulary: List[str]
-        common_words: List[str]
-
-    # Send Request (Initial Extraction)
-    messages = [{"role": "user", "content": user_prompt}]
-
-    response = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        reasoning_effort="minimal",
-        messages=messages,
-        response_format=VocabularyExtraction,
-        n=1
-    )
-
-    base_extraction = response.choices[0].message.parsed
-
-    # Step-Back Reflection Prompt
-    step_back_prompt = f"""# Step-Back Reflection:
-You are a writing reflection assistant.
-Review the extracted vocabulary lists below and ensure they accurately represent the essay's lexical field and word usage.
-
-# Task:
-1. If any words are too generic or irrelevant, replace or refine them.
-2. Ensure the vocabulary truly fits the essay’s domain, tone, and topic.
-
-Essay Content:
-{current_writing_content}
-
-Initial Extraction:
-Vocabulary: {base_extraction.vocabulary}
-Common Words: {base_extraction.common_words}
-
-Return revised output strictly in this JSON format:
-
-{{
-  "vocabulary": ["word1", "word2", ...],
-  "common_words": ["wordA", "wordB", ...]
-}}
-"""
-
-    # Send Step-Back Request (Refinement)
-    response_refined = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        reasoning_effort="minimal",
-        messages=[{"role": "user", "content": step_back_prompt}],
-        response_format=VocabularyExtraction,
-        n=1
-    )
-
-    refined_extraction = response_refined.choices[0].message.parsed
-
-    result = {
-    "vocabulary": refined_extraction.vocabulary[:5],
-    "common_words": refined_extraction.common_words[:5]
-    }
+# # Output format (strictly JSON):
+# {{
+#   "vocabulary": ["word1", "word2", "word3", "word4", "word5"],
+#   "common_words": ["wordA", "wordB", "wordC", "wordD", "wordE"]
+# }}
+# """
 
 
-    return result
+#     class VocabularyExtraction(BaseModel):
+#         vocabulary: List[str]
+#         common_words: List[str]
+
+#     # Send Request (Initial Extraction)
+#     messages = [{"role": "user", "content": user_prompt}]
+
+#     response = client.beta.chat.completions.parse(
+#         model="gpt-5-nano",
+#         reasoning_effort="minimal",
+#         messages=messages,
+#         response_format=VocabularyExtraction,
+#         n=1
+#     )
+
+#     base_extraction = response.choices[0].message.parsed
+
+#     # Step-Back Reflection Prompt
+#     step_back_prompt = f"""# Step-Back Reflection:
+# You are a writing reflection assistant.
+# Review the extracted vocabulary lists below and ensure they accurately represent the essay's lexical field and word usage.
+
+# # Task:
+# 1. If any words are too generic or irrelevant, replace or refine them.
+# 2. Ensure the vocabulary truly fits the essay’s domain, tone, and topic.
+
+# Essay Content:
+# {current_writing_content}
+
+# Initial Extraction:
+# Vocabulary: {base_extraction.vocabulary}
+# Common Words: {base_extraction.common_words}
+
+# Return revised output strictly in this JSON format:
+
+# {{
+#   "vocabulary": ["word1", "word2", ...],
+#   "common_words": ["wordA", "wordB", ...]
+# }}
+# """
+
+#     # Send Step-Back Request (Refinement)
+#     response_refined = client.beta.chat.completions.parse(
+#         model="gpt-5-nano",
+#         reasoning_effort="minimal",
+#         messages=[{"role": "user", "content": step_back_prompt}],
+#         response_format=VocabularyExtraction,
+#         n=1
+#     )
+
+#     refined_extraction = response_refined.choices[0].message.parsed
+
+#     result = {
+#     "vocabulary": refined_extraction.vocabulary[:5],
+#     "common_words": refined_extraction.common_words[:5]
+#     }
+
+
+#     return result
 
 
 def vote_writing_purpose(current_writing_content, writing_purposes_list):
@@ -818,6 +953,7 @@ Several English essays:
     
     return writing_patterns_formatted_output, writing_features_formatted_output
 
+
 # Predict the final sentence using collected context
 def predict_sentence(
     title,
@@ -829,8 +965,17 @@ def predict_sentence(
     best_match_sentence_pattern,
     writing_patterns_formatted_output,
     writing_features_formatted_output,
-    vocabulary_info  # new
+    #vocabulary_info  # new
 ):
+    # Run Step-Back Reasoning Component
+    reasoning_output = reasoning_component(
+    essay_context=context_info,
+    previous_sentence=answer_from_history,
+    current_sentence=current_writing_content)
+    
+    # Extracted Vocabulary Context:
+# Vocabulary Words: {', '.join(vocabulary_info.get('vocabulary', []))}
+# Common Words: {', '.join(vocabulary_info.get('common_words', []))}
     # Build prompt for generating the predicted sentence
     user_prompt = f"""# Instruction:
 You are an AI writing assistant specialized in predicting a sentence within a user’s English essay. 
@@ -876,9 +1021,19 @@ Enhancement Details:
 
 {answer_from_history}
 
-Extracted Vocabulary Context:
-Vocabulary Words: {', '.join(vocabulary_info.get('vocabulary', []))}
-Common Words: {', '.join(vocabulary_info.get('common_words', []))}
+# Step-Back Reasoning Output:
+Abstract Concept:
+{reasoning_output["stepback_reasoning"]}
+
+Semantic Goal:
+{reasoning_output["semantic_goal"]}
+
+Writing Style:
+{reasoning_output["writing_style"]}
+
+Reasoning Summary:
+{reasoning_output["reasoning_summary"]}
+
 
 # Your Task:
 1. **Focus on the Core Topic:**
@@ -944,7 +1099,6 @@ def get_or_create_sentence_pattern(sid, eid, current_content, history_content, p
             row = cursor.fetchone()
             print(f"[DEBUG] SELECT result row={row}")
             if row:
-                # Handle dict atau tuple
                 if isinstance(row, dict):
                     return row.get("pattern_result")
                 elif isinstance(row, (list, tuple)):
@@ -952,14 +1106,17 @@ def get_or_create_sentence_pattern(sid, eid, current_content, history_content, p
                 else:
                     return row
 
-            # Generate a new pattern when the cache misses
-            result = identify_sentence_pattern(
+            # 🔥 1. Generate new pattern (raw)
+            raw_result = identify_sentence_pattern(
                 current_content,
                 history_content,
                 purpose
             )
 
-            # simpan ke DB
+            # 🔥 2. Normalisasi agar bebas dari error
+            result = normalize_pattern_string(raw_result)
+
+            # 🔥 3. Simpan ke DB
             insert_sql = """
                 INSERT INTO sentence_patterns (sid, eid, pattern_result)
                 VALUES (%s, %s, %s)
@@ -976,6 +1133,43 @@ def get_or_create_sentence_pattern(sid, eid, current_content, history_content, p
     finally:
         if connection:
             connection.close()
+
+
+
+def normalize_pattern_string(value: str) -> str: # normalize "type:" from llm
+    """
+    Membersihkan pola keluaran LLM seperti:
+    '3. Type: Cultural ...'
+    '3.Type:...'
+    'Pattern: Pattern: ...'
+    'Type: Type: ...'
+    menjadi format standar:
+    'Type: <pattern description>'
+    """
+
+    if not isinstance(value, str):
+        return value
+
+    v = value.strip()
+
+    # 1. Hilangkan angka prefix misalnya "3." atau "4. "
+    if v[0].isdigit() and "." in v:
+        v = v.split(".", 1)[1].strip()
+
+    # 2. Hilangkan duplicate "Type: Type:" yang sering muncul di LLM
+    while v.lower().startswith("type: type:"):
+        v = v[5:].strip()  # hapus satu "Type:"
+
+    # 3. Hilangkan prefix "Pattern:" jika muncul
+    if v.lower().startswith("pattern:"):
+        v = v[len("pattern:"):].strip()
+
+    # 4. Pastikan final string diawali dengan "Type:"
+    if not v.lower().startswith("type:"):
+        v = "Type: " + v
+
+    return v
+
             
 # Execute prediction
 async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, history_essay_content: str, images_info: List[dict], title: str) -> str:
@@ -1051,10 +1245,10 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
             print(f"[DEBUG] Writing-style analysis took {time.time() - style_start:.2f} s")
 
             # 8️ NEW: Vocabulary Extraction (for lexical insight)
-            vocab_start = time.time()
-            vocabulary_info = extract_vocabulary_features(current_essay_content)
-            print(f"[DEBUG] Vocabulary extraction took {time.time() - vocab_start:.2f} s")
-            print(f"[INFO] Extracted vocabulary info: {vocabulary_info}")
+            # vocab_start = time.time()
+            # vocabulary_info = extract_vocabulary_features(current_essay_content)
+            # print(f"[DEBUG] Vocabulary extraction took {time.time() - vocab_start:.2f} s")
+            # print(f"[INFO] Extracted vocabulary info: {vocabulary_info}")
 
             # 9. Generate predicted sentence
             predict_start = time.time()
@@ -1068,7 +1262,7 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
                 best_match_sentence_pattern,
                 writing_patterns_formatted_output,
                 writing_features_formatted_output,
-                vocabulary_info  # ✅ new feature
+                # vocabulary_info  # ✅ new feature
             )
             if not final_predict_sentence:
                 raise ValueError("Model did not return a predicted sentence.")
