@@ -17,7 +17,11 @@ class ImageAnalysis(BaseModel):
     description: str     # NOTE: Comment replaced (original text contained non-English characters).
 
 def analyze_image(image_base64: str) -> dict:
-    """使用 gpt-4o-mini 分析圖片內容，針對 EFL 寫作需求提供關鍵字和描述"""
+    """
+    Analyze image content using gpt-4o-mini by first abstracting the overall scene,
+    then generating keywords and descriptions to support EFL (English as a Foreign Language)
+    writing tasks.
+    """
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -27,26 +31,42 @@ def analyze_image(image_base64: str) -> dict:
                     "content": [
                         {
                             "type": "text",
-                            "text": """As an EFL writing assistant, please analyze this image and provide:
+                            "text": """You are an EFL writing assistant.
 
-1. Keywords (5-8 items):
+Before producing the final answer, perform the following internal steps:
+
+Step 1: High-level understanding
+- Identify the overall scene shown in the image.
+- Determine what is happening, where it is happening, and who is involved.
+
+Step 2: Abstraction for writing support
+- Select elements that are most useful for EFL learners.
+- Focus on concrete, observable objects, actions, and attributes.
+
+Step 3: Final output generation
+Based on the understanding above, provide:
+
+1. Keywords (5–8 items):
 - Important nouns (objects, people, places)
 - Action verbs (movements, activities)
 - Descriptive adjectives (colors, sizes, emotions)
 
-2. Description (2-3 sentences):
+2. Description (2–3 sentences):
 - Use the identified keywords
-- Focus on clear and simple sentence structures
-- Describe the main elements and their relationships
+- Use clear, simple, and beginner-friendly sentence structures
+- Describe the main elements and their relationships logically
 
-Format your response as:
+Format your response strictly as:
 Keywords:
 [list your keywords]
 
 Description:
 [your description]
 
-Response restrictions: No special characters allowed. Include only keywords and descriptions without additional content."""
+Response restrictions:
+- No special characters allowed
+- Output only keywords and description
+- Do not include explanations, reasoning steps, or extra text."""
                         },
                         {
                             "type": "image_url",
@@ -59,47 +79,48 @@ Response restrictions: No special characters allowed. Include only keywords and 
             ],
             max_tokens=500
         )
-        
+
         content = response.choices[0].message.content
-        
-        # NOTE: Comment replaced (original text contained non-English characters).
+
+        # Parse AI response
         try:
-            # NOTE: Comment replaced (original text contained non-English characters).
+            # Separate keywords and description sections
             keywords_section = content.split("Keywords:")[1].split("Description:")[0]
             description_section = content.split("Description:")[1]
-            
-            # NOTE: Comment replaced (original text contained non-English characters).
+
+            # Process keywords
             keywords = [
-                k.strip().strip('- ') 
-                for k in keywords_section.strip().split('\n') 
-                if k.strip() and k.strip() != '-'
+                k.strip().strip("- ")
+                for k in keywords_section.strip().split("\n")
+                if k.strip() and k.strip() != "-"
             ]
-            
-            # NOTE: Comment replaced (original text contained non-English characters).
+
+            # Process description
             description = description_section.strip()
-            
-            # NOTE: Comment replaced (original text contained non-English characters).
+
+            # Validate using Pydantic model
             analysis = ImageAnalysis(
                 keywords=keywords,
                 description=description
             )
-            
+
             return {
                 "success": True,
                 "data": analysis.dict()
             }
-            
-        except Exception as e:
+
+        except Exception:
             return {
                 "success": False,
                 "error": "Failed to parse AI response format"
             }
-            
+
     except Exception as e:
         return {
             "success": False,
             "error": str(e)
         }
+
     
 def initialize_homework1_essay(sid: str, title: str) -> Dict[str, any]:
     """

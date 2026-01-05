@@ -88,6 +88,10 @@ async def teacher_index(request: Request):
 async def predict_test(request: Request):
     return templates.TemplateResponse("predict_test.html", {"request": request})
 
+@app.get("/predict_batch", response_class=HTMLResponse)
+async def predict_batch(request: Request):
+    return templates.TemplateResponse("predict_batch.html", {"request": request})
+
 
 # Login request payload
 class LoginData(BaseModel):

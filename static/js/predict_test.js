@@ -88,6 +88,23 @@
     entry.statusTone = "muted";
   }
 
+  function cleanEssayText(value) {
+    if (!value) return "";
+    let text = value;
+    text = text.replace(/<div>\s*(<br\s*\/?>)?\s*<\/div>/gi, "\n");
+    text = text.replace(/<br\s*\/?>/gi, "\n");
+    text = text.replace(/<\/?p[^>]*>/gi, "\n");
+    text = text.replace(/<\/?div[^>]*>/gi, "\n");
+    text = text.replace(/&nbsp;/gi, " ");
+    text = text.replace(/<[^>]+>/g, "");
+    text = text.replace(/\r\n/g, "\n");
+    text = text
+      .split("\n")
+      .map((line) => line.trim())
+      .join("\n");
+    return text.replace(/\n{3,}/g, "\n\n").trim();
+  }
+
   function handleImageFileSelection(index, file) {
     const entry = cachedImages[index];
     if (!entry) {
@@ -408,6 +425,45 @@
     syncImagesTextarea();
   }
 
+  async function loadImagesOnly() {
+    const eid = requireEid();
+    const result = await fetchJSON(`/load_hw_data/${eid}`);
+
+    if (!result.success) {
+      throw new Error(result.error || "Failed to load homework data.");
+    }
+
+    const images = Array.isArray(result.data?.images)
+      ? result.data.images.map((img) => {
+          const entry = createImageEntry();
+          entry.keywords = Array.isArray(img.modify_keywords)
+            ? img.modify_keywords
+                .map((kw) =>
+                  typeof kw === "string" ? kw.trim() : String(kw || "").trim()
+                )
+                .filter(Boolean)
+            : typeof img.modify_keywords === "string"
+            ? img.modify_keywords
+                .split(",")
+                .map((kw) => kw.trim())
+                .filter(Boolean)
+            : [];
+          entry.description =
+            typeof img.modify_description === "string"
+              ? img.modify_description
+              : "";
+          if (entry.keywords.length || entry.description) {
+            entry.statusMessage = "Loaded from homework data.";
+            entry.statusTone = "muted";
+          }
+          return entry;
+        })
+      : [];
+
+    cachedImages = images;
+    renderImages();
+  }
+
   function setStatus(element, message, tone = "muted") {
     const toneClass =
       tone === "success"
@@ -549,7 +605,7 @@
   loadHomeworkBtn.addEventListener("click", async () => {
     try {
       loadHomeworkBtn.disabled = true;
-      setStatus(homeworkStatus, "Loading homework data...");
+      setStatus(homeworkStatus, "Loading and cleaning homework data...");
       const eid = requireEid();
       const result = await fetchJSON(`/load_hw_data/${eid}`);
 
@@ -564,7 +620,12 @@
 
       const essay = result.data?.essay ?? {};
       titleInput.value = essay.topic ?? "";
-      currentEssay.value = essay.content ?? "";
+      const rawContent = essay.content ?? "";
+      const cleanedContent = cleanEssayText(rawContent);
+      // Debug helper for troubleshooting HTML cleaning issues
+      console.debug("[predict_test] raw essay content:", rawContent);
+      console.debug("[predict_test] cleaned essay content:", cleanedContent);
+      currentEssay.value = cleanedContent;
 
       const images = Array.isArray(result.data?.images)
         ? result.data.images.map((img) => {
@@ -597,6 +658,8 @@
       loadHomeworkBtn.disabled = false;
     }
   });
+
+  // no extra image/clean buttons; use Load Homework to refresh content and images
 
   saveHomeworkBtn.addEventListener("click", async () => {
     try {

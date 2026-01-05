@@ -90,6 +90,7 @@ def check_hw2_status(sid: str) -> dict:
             connection.close()
 
 def load_hw_data(eid: str) -> dict:
+    """Load homework data and return cleaned essay/content/images/predictions."""
     """載入作業相關資料
     
     Args:
@@ -163,7 +164,7 @@ def load_hw_data(eid: str) -> dict:
                 'data': {
                     'essay': {
                         'topic': essay_data['topic'],
-                        'content': essay_data['content']
+                        'content': clean_html_content(essay_data['content'])
                     },
                     'images': [{
                         'iid': img['iid'],
@@ -529,3 +530,17 @@ def update_prediction_check_count(pid: str) -> dict:
             connection.close()
 
             
+def clean_html_content(text: str) -> str:
+    """Strip simple HTML wrappers and normalize whitespace/newlines."""
+    if not text:
+        return ""
+    cleaned = text.replace("\r\n", "\n")
+    cleaned = re.sub(r'<div>\s*(<br\s*/?>)?\s*</div>', '\n', cleaned, flags=re.I)
+    cleaned = re.sub(r'<br\s*/?>', '\n', cleaned, flags=re.I)
+    cleaned = re.sub(r'</?p[^>]*>', '\n', cleaned, flags=re.I)
+    cleaned = re.sub(r'</?div[^>]*>', '\n', cleaned, flags=re.I)
+    cleaned = re.sub(r'&nbsp;', ' ', cleaned, flags=re.I)
+    cleaned = re.sub(r'<[^>]+>', '', cleaned)
+    cleaned = '\n'.join(line.rstrip() for line in cleaned.split('\n'))
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    return cleaned.strip()

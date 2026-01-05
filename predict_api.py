@@ -1,6 +1,7 @@
 from openai import OpenAI
 from pydantic import BaseModel
 from typing import List, Optional
+import json
 import asyncio
 import time
 import re
@@ -17,7 +18,68 @@ client = OpenAI(api_key=GPT_API_KEY)
 # generate the reasoning from history essays
 # construct the output to Pydantic
 
+#================= re-rank historical component====================
+def gpt_extract_ranked_snippets_from_raw_history(
+    client,
+    model: str,
+    title: str,
+    purpose: str,
+    current_window: str,
+    raw_history: str,
+    top_n_snippets: int = 8
+):
+    prompt = f"""
+You are extracting and ranking the best historical writing snippets to help predict ONE next sentence in an English essay.
 
+Essay title: {title}
+Writing purpose: {purpose}
+Current window: {current_window}
+
+Historical essays (raw):
+{raw_history}
+
+Task:
+- Extract short snippets (1-2 sentences each) from the historical essays.
+- Rank the snippets by usefulness for predicting the next sentence.
+- Snippets must match topic and purpose, and avoid redundancy with the current window.
+- Do NOT copy long passages.
+
+Return JSON only:
+{{
+  "snippets": [
+    {{
+      "source": "Essay Number (eg. essay 1)",
+      "score": 0-100,
+      "reason": "<short>",
+      "text": "<1-2 sentences>"
+    }}
+  ]
+}}
+""".strip()
+
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role":"user","content": prompt}],
+        reasoning_effort="minimal"
+    )
+    raw = (resp.choices[0].message.content or "").strip()
+    raw = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
+        if not match:
+            raise
+        data = json.loads(match.group(0))
+
+    snippets = data.get("snippets", [])
+    if not isinstance(snippets, list):
+        return []
+
+    return snippets[:top_n_snippets]
+
+
+#============== Reasoning Component ===================
 def reasoning_component(essay_context: str, previous_sentence: str, current_sentence: str) -> dict:
     """
     Reasoning Component using Step-Back Prompting 
@@ -976,6 +1038,7 @@ def predict_sentence(
     # Extracted Vocabulary Context:
 # Vocabulary Words: {', '.join(vocabulary_info.get('vocabulary', []))}
 # Common Words: {', '.join(vocabulary_info.get('common_words', []))}
+
     # Build prompt for generating the predicted sentence
     user_prompt = f"""# Instruction:
 You are an AI writing assistant specialized in predicting a sentence within a user’s English essay. 
@@ -1214,6 +1277,28 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
                 if query_answer_from_history != "I am sorry but I am unable to answer this question given the provided data.":
                     answer_from_history_list += f"Question: {query}\nAnswer: {query_answer_from_history}\n\n"
             print(f"[DEBUG] Historical retrieval took {time.time() - history_start:.2f} s")
+
+            # 4b. Extract ranked snippets from raw history for additional context
+            snippets_start = time.time()
+            ranked_snippets = gpt_extract_ranked_snippets_from_raw_history(
+                client=client,
+                model="gpt-5-nano",
+                title=title,
+                purpose=best_match_writing_purpose,
+                current_window=current_essay_content,
+                raw_history=history_essay_content,
+                top_n_snippets=8
+            )
+            if ranked_snippets:
+                snippet_block = ""
+                for snip in ranked_snippets:
+                    text = snip.get("text", "")
+                    source = snip.get("source", "")
+                    if text:
+                        snippet_block += f"Snippet ({source}): {text}\n"
+                if snippet_block:
+                    answer_from_history_list += f"Ranked Snippets:\n{snippet_block}\n"
+            print(f"[DEBUG] History snippet rerank took {time.time() - snippets_start:.2f} s")
 
             # 5. Retrieve answers from current essay
             current_start = time.time()
