@@ -20,5 +20,6 @@ scikit-learn
 sentencepiece
 transformers
 torch
+sentence-transformers
 graphrag==0.3.4
 Pillow

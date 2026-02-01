@@ -14,6 +14,15 @@
 
   const predictionResult = document.getElementById("predictionResult");
   const promptPreview = document.getElementById("promptPreview");
+  const feedbackJudgment = document.getElementById("feedbackJudgment");
+  const feedbackOriginalSentence = document.getElementById("feedbackOriginalSentence");
+  const feedbackBtn = document.getElementById("feedbackBtn");
+  const feedbackStatus = document.getElementById("feedbackStatus");
+  const feedbackPrediction = document.getElementById("feedbackPrediction");
+  const feedbackIteration = document.getElementById("feedbackIteration");
+  const feedbackSimilarity = document.getElementById("feedbackSimilarity");
+  const feedbackRationale = document.getElementById("feedbackRationale");
+  const feedbackRevisedPrompt = document.getElementById("feedbackRevisedPrompt");
 
   const loadHistoryBtn = document.getElementById("loadHistoryBtn");
   const createHomeworkBtn = document.getElementById("createHomeworkBtn");
@@ -409,6 +418,9 @@
   }
 
   function setStatus(element, message, tone = "muted") {
+    if (!element) {
+      return;
+    }
     const toneClass =
       tone === "success"
         ? "text-success"
@@ -659,8 +671,12 @@
       });
 
       if (result.success) {
-        predictionResult.value = result.predict_sentence ?? "";
-        promptPreview.value = result.predict_prompt ?? "";
+        if (predictionResult) {
+          predictionResult.value = result.predict_sentence ?? "";
+        }
+        if (promptPreview) {
+          promptPreview.value = result.predict_prompt ?? "";
+        }
         setStatus(homeworkStatus, "Prediction generated successfully.", "success");
       } else {
         setStatus(
@@ -677,6 +693,85 @@
         '<i class="fa-solid fa-wand-magic-sparkles me-2"></i>Generate Predict Sentence';
     }
   });
+
+  if (feedbackBtn) {
+    feedbackBtn.addEventListener("click", async () => {
+      try {
+        feedbackBtn.disabled = true;
+        feedbackBtn.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
+
+        const eid = requireEid();
+        const judgment = feedbackJudgment ? feedbackJudgment.value.trim() : "";
+        const originalSentence = feedbackOriginalSentence
+          ? feedbackOriginalSentence.value.trim()
+          : "";
+
+        if (!judgment) {
+          throw new Error("User judgment is required.");
+        }
+        if (judgment === "not ok" && !originalSentence) {
+          throw new Error("Original sentence is required when judgment is 'not ok'.");
+        }
+
+        setStatus(feedbackStatus, "Submitting feedback...");
+
+        const body = {
+          essay_id: eid,
+          user_judgment: judgment,
+          user_original_sentence: originalSentence || null,
+        };
+
+        const result = await fetchJSON("/predict_feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (result.success) {
+          if (feedbackPrediction) {
+            feedbackPrediction.value = result.predicted_sentence ?? "";
+          }
+          if (feedbackIteration) {
+            feedbackIteration.value =
+              result.iteration === null || result.iteration === undefined
+                ? ""
+                : String(result.iteration);
+          }
+          if (feedbackSimilarity) {
+            feedbackSimilarity.value =
+              result.similarity_score === null || result.similarity_score === undefined
+                ? ""
+                : Number(result.similarity_score).toFixed(4);
+          }
+          if (feedbackRationale) {
+            feedbackRationale.value = result.revision_rationale ?? "";
+          }
+          if (feedbackRevisedPrompt) {
+            feedbackRevisedPrompt.value = result.revised_pcp_prompt ?? "";
+          }
+
+          const statusLabel =
+            result.status === "final"
+              ? "Feedback processed. Status: final."
+              : "Feedback processed. Please review and judge again.";
+          setStatus(feedbackStatus, statusLabel, "success");
+        } else {
+          setStatus(
+            feedbackStatus,
+            result.error || "Feedback processing failed.",
+            "danger"
+          );
+        }
+      } catch (err) {
+        setStatus(feedbackStatus, err.message, "danger");
+      } finally {
+        feedbackBtn.disabled = false;
+        feedbackBtn.innerHTML =
+          '<i class="fa-solid fa-rotate-right me-2"></i>Submit Feedback';
+      }
+    });
+  }
 
   renderImages();
 })();

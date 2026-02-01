@@ -1,16 +1,27 @@
 from openai import OpenAI
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import asyncio
 import time
 import re
 from collections import Counter
+import json
+from datetime import datetime, timezone
+import numpy as np
+import os
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
 from graphRAG.global_search import search_graph
 import pymysql
 
 from api_config import GPT_API_KEY
 from db_config import DB_CONFIG
 client = OpenAI(api_key=GPT_API_KEY)
+
+MAX_FEEDBACK_RETRY = 3
+FEEDBACK_LOG_PATH = "feedback_iterations.jsonl"
+_FEEDBACK_STATE: Dict[str, Dict[str, Any]] = {}
 
 
 ## add the reasoning Prompt for the component
@@ -24,7 +35,7 @@ def reasoning_component(essay_context: str, previous_sentence: str, current_sent
     with client.beta.chat.completions.parse()
     """
 
-    # ==================== ① Step-Back Abstraction ====================
+    # ==================== Step-Back Abstraction ====================
     class StepBackOutput(BaseModel):
         abstract_concept: str
         forward_reasoning: str
@@ -55,7 +66,7 @@ def reasoning_component(essay_context: str, previous_sentence: str, current_sent
     stepback_output = sb.choices[0].message.parsed
 
 
-    # ==================== ② Semantic Goal ====================
+    # ==================== Semantic Goal ====================
     class SemanticGoal(BaseModel):
         semantic_goal: str
 
@@ -81,7 +92,7 @@ def reasoning_component(essay_context: str, previous_sentence: str, current_sent
     semantic_goal = sem.choices[0].message.parsed.semantic_goal
 
 
-    # ==================== ③ Writing Style ====================
+    # ==================== Writing Style ====================
     class WritingStyle(BaseModel):
         writing_style: str
         tone: str
@@ -112,7 +123,7 @@ def reasoning_component(essay_context: str, previous_sentence: str, current_sent
     writing_style = st.choices[0].message.parsed
 
 
-    # ==================== ④ Reasoning Summary ====================
+    # ==================== Reasoning Summary ====================
     class SummaryOutput(BaseModel):
         reasoning_summary: str
 
@@ -224,97 +235,6 @@ def _resolve_vote_option(selection: str, options: List[str]) -> Optional[int]:
             return idx
 
     return None
-
-# ============================================
-# Vocabulary Extraction (Inline Component)
-# ============================================
-
-# def extract_vocabulary_features(current_writing_content: str):
-#     """Extracts vocabulary and common words from current essay using step-back reasoning."""
-
-#     user_prompt = f"""# Instruction:
-# You are an advanced AI assistant specialized in English writing analysis.
-# Your task is to extract the key vocabulary characteristics from a student's English essay.
-
-# # Your Task:
-# 1. Identify and return **EXACTLY 5** most frequently used topic-related vocabulary words that represent the essay’s subject domain.
-# 2. Identify and return **EXACTLY 5** common words that appear frequently and reflect the student's writing style.
-# 3. Do not include essay titles or themes; focus only on the essay body text.
-# 4. If more than 5 are possible, choose the **most representative 5 words only**.
-# 5. The final JSON output **must not contain more than 5 words per list**.
-
-# # Input:
-# Essay Content:
-# {current_writing_content}
-
-# # Output format (strictly JSON):
-# {{
-#   "vocabulary": ["word1", "word2", "word3", "word4", "word5"],
-#   "common_words": ["wordA", "wordB", "wordC", "wordD", "wordE"]
-# }}
-# """
-
-
-#     class VocabularyExtraction(BaseModel):
-#         vocabulary: List[str]
-#         common_words: List[str]
-
-#     # Send Request (Initial Extraction)
-#     messages = [{"role": "user", "content": user_prompt}]
-
-#     response = client.beta.chat.completions.parse(
-#         model="gpt-5-nano",
-#         reasoning_effort="minimal",
-#         messages=messages,
-#         response_format=VocabularyExtraction,
-#         n=1
-#     )
-
-#     base_extraction = response.choices[0].message.parsed
-
-#     # Step-Back Reflection Prompt
-#     step_back_prompt = f"""# Step-Back Reflection:
-# You are a writing reflection assistant.
-# Review the extracted vocabulary lists below and ensure they accurately represent the essay's lexical field and word usage.
-
-# # Task:
-# 1. If any words are too generic or irrelevant, replace or refine them.
-# 2. Ensure the vocabulary truly fits the essay’s domain, tone, and topic.
-
-# Essay Content:
-# {current_writing_content}
-
-# Initial Extraction:
-# Vocabulary: {base_extraction.vocabulary}
-# Common Words: {base_extraction.common_words}
-
-# Return revised output strictly in this JSON format:
-
-# {{
-#   "vocabulary": ["word1", "word2", ...],
-#   "common_words": ["wordA", "wordB", ...]
-# }}
-# """
-
-#     # Send Step-Back Request (Refinement)
-#     response_refined = client.beta.chat.completions.parse(
-#         model="gpt-5-nano",
-#         reasoning_effort="minimal",
-#         messages=[{"role": "user", "content": step_back_prompt}],
-#         response_format=VocabularyExtraction,
-#         n=1
-#     )
-
-#     refined_extraction = response_refined.choices[0].message.parsed
-
-#     result = {
-#     "vocabulary": refined_extraction.vocabulary[:5],
-#     "common_words": refined_extraction.common_words[:5]
-#     }
-
-
-#     return result
-
 
 def vote_writing_purpose(current_writing_content, writing_purposes_list):
     # Format candidate purposes for voting
@@ -510,7 +430,7 @@ Question: {query}
     except Exception as e:
         return f"Error during RAG search: {str(e)}"
     
-    ## REASONING COMPONENT ? ###
+    ## REASONING COMPONENT ###
  
 # Answer questions using the current essay content
 def answer_from_current(current_writing_content, query):
@@ -1172,7 +1092,14 @@ def normalize_pattern_string(value: str) -> str: # normalize "type:" from llm
 
             
 # Execute prediction
-async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, history_essay_content: str, images_info: List[dict], title: str) -> str:
+async def get_predict_sentence(
+    sid: str,
+    eid: int,
+    current_essay_content: str,
+    history_essay_content: str,
+    images_info: List[dict],
+    title: str,
+) -> tuple[str, str]:
     start_time = time.time()  # Start time
     try:
         timeout = 100  # seconds
@@ -1251,7 +1178,7 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
             # print(f"[INFO] Extracted vocabulary info: {vocabulary_info}")
 
             # 9. Generate predicted sentence
-            predict_start = time.time()
+            predict_start = time.time()  
             final_predict_sentence, user_prompt = predict_sentence(
                 title,
                 context_info,
@@ -1267,6 +1194,25 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
             if not final_predict_sentence:
                 raise ValueError("Model did not return a predicted sentence.")
             print(f"[DEBUG] Sentence prediction took {time.time() - predict_start:.2f} s")
+
+            context_summary = {
+                "title": title,
+                "writing_purpose": best_match_writing_purpose,
+                "current_window": current_essay_content,
+                "wsm_patterns": writing_patterns_formatted_output,
+                "wsm_features": writing_features_formatted_output,
+                "iem_snippets": {
+                    "from_current": answer_from_current_list,
+                    "from_history": answer_from_history_list,
+                },
+                "contextual_information": context_info,
+            }
+            _cache_feedback_state(
+                essay_id=str(eid),
+                predicted_sentence=final_predict_sentence,
+                pcp_prompt=user_prompt,
+                context_summary=context_summary,
+            )
 
             return final_predict_sentence, user_prompt
 
@@ -1285,9 +1231,314 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
         raise e
 
 
-            
+def _cache_feedback_state(
+    essay_id: str,
+    predicted_sentence: str,
+    pcp_prompt: str,
+    context_summary: Dict[str, Any],
+) -> None:
+    _FEEDBACK_STATE[str(essay_id)] = {
+        "predicted_sentence": predicted_sentence,
+        "pcp_prompt": pcp_prompt,
+        "context_summary": context_summary,
+        "iteration": 0,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
+def _append_feedback_log(record: Dict[str, Any]) -> None:
+    try:
+        with open(FEEDBACK_LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=True) + "\n")
+    except Exception as exc:
+        print(f"[WARNING] Failed to persist feedback iteration: {exc}")
 
+
+class SimilarityEvaluatorBgeM3:
+    """Evaluate similarity using BGE-M3 embeddings with a TF-IDF fallback."""
+
+    def __init__(self, model_name_or_path: str = "BAAI/bge-m3", cache_size: int = 256) -> None:
+        self._cache: Dict[str, np.ndarray] = {}
+        self._cache_size = max(cache_size, 1)
+        model_path = os.environ.get("BGE_M3_MODEL_PATH", model_name_or_path)
+        try:
+            self._model = SentenceTransformer(model_path, local_files_only=True)
+            self._use_fallback = False
+            self.embedding_model = "bge-m3"
+        except Exception as exc:
+            print(f"[WARNING] BGE-M3 load failed, using TF-IDF fallback: {exc}")
+            self._model = None
+            self._use_fallback = True
+            self.embedding_model = "tf-idf-fallback"
+
+    def _cache_embedding(self, text: str, embedding: np.ndarray) -> None:
+        if text in self._cache:
+            return
+        if len(self._cache) >= self._cache_size:
+            self._cache.pop(next(iter(self._cache)))
+        self._cache[text] = embedding
+
+    def _get_embedding(self, text: str) -> np.ndarray:
+        cached = self._cache.get(text)
+        if cached is not None:
+            return cached
+        embedding = self._model.encode([text], convert_to_numpy=True, normalize_embeddings=True)[0]
+        self._cache_embedding(text, embedding)
+        return embedding
+
+    def _tfidf_score(self, a: str, b: str) -> float:
+        vectorizer = TfidfVectorizer()
+        matrix = vectorizer.fit_transform([a, b])
+        score = cosine_similarity(matrix[0], matrix[1])[0][0]
+        return float(max(0.0, min(1.0, score)))
+
+    def score(self, a: str, b: str) -> float:
+        if not a or not b:
+            return 0.0
+        if self._use_fallback:
+            return self._tfidf_score(a, b)
+
+        try:
+            emb_a = self._get_embedding(a)
+            emb_b = self._get_embedding(b)
+            denom = (np.linalg.norm(emb_a) * np.linalg.norm(emb_b))
+            if denom == 0:
+                return 0.0
+            score = float(np.dot(emb_a, emb_b) / denom)
+            return max(0.0, min(1.0, score))
+        except Exception as exc:
+            print(f"[WARNING] BGE-M3 scoring failed, using TF-IDF fallback: {exc}")
+            return self._tfidf_score(a, b)
+
+
+class PcpReviserGpt52:
+    """Revise PCP prompts with GPT-5.2, returning JSON-only output."""
+
+    def __init__(self) -> None:
+        self._client = client
+
+    def _build_messages(
+        self,
+        prev_pcp: str,
+        prev_pred: str,
+        original: str,
+        score: float,
+        ctx: Dict[str, Any],
+    ) -> List[Dict[str, str]]:
+        ctx_text = json.dumps(ctx, ensure_ascii=True, indent=2)
+        system_prompt = (
+            "You are a deterministic prompt revision agent. "
+            "Return ONLY valid JSON with keys: revised_pcp_prompt, short_revision_rationale. "
+            "Do not include any extra keys, code fences, or commentary."
+        )
+        user_prompt = f"""Revise the PCP prompt to improve semantic alignment.
+
+Inputs:
+prev_pcp_prompt:
+<<<
+{prev_pcp}
+>>>
+
+prev_predicted_sentence:
+{prev_pred}
+
+user_original_sentence:
+{original}
+
+similarity_score (0..1):
+{score:.4f}
+
+current_essay_context_summary (JSON):
+{ctx_text}
+
+Rules:
+- Revise the prompt.
+- Keep the prediction aligned to the essay topic and purpose.
+- give keyword related to original sentence.
+- Output JSON only with:
+  - revised_pcp_prompt (string)
+  - short_revision_rationale (string, <= 80 words)
+"""
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _parse_revision(self, content: str) -> Dict[str, str]:
+        data = json.loads(content or "{}")
+        revised = str(data.get("revised_pcp_prompt", "")).strip()
+        rationale = str(data.get("short_revision_rationale", "")).strip()
+        if not revised or not rationale:
+            raise ValueError("Missing required revision fields.")
+        words = rationale.split()
+        if len(words) > 80:
+            rationale = " ".join(words[:80])
+        return {
+            "revised_pcp_prompt": revised,
+            "short_revision_rationale": rationale,
+        }
+
+    def revise(
+        self,
+        prev_pcp: str,
+        prev_pred: str,
+        original: str,
+        score: float,
+        ctx: Dict[str, Any],
+    ) -> Dict[str, str]:
+        messages = self._build_messages(prev_pcp, prev_pred, original, score, ctx)
+        for attempt in range(2):
+            try:
+                response = self._client.chat.completions.create(
+                    model="gpt-5.2",
+                    messages=messages,
+                    temperature=0,
+                    response_format={"type": "json_object"},
+                )
+                content = response.choices[0].message.content or ""
+                return self._parse_revision(content)
+            except Exception as exc:
+                if attempt == 0:
+                    print(f"[WARNING] Revision JSON parse failed, retrying: {exc}")
+                    continue
+                print(f"[WARNING] Revision failed, falling back to previous PCP: {exc}")
+                break
+        return {
+            "revised_pcp_prompt": prev_pcp,
+            "short_revision_rationale": "Revision failed; using previous PCP prompt.",
+        }
+
+
+_SIMILARITY_EVALUATOR: Optional[SimilarityEvaluatorBgeM3] = None
+_PCP_REVISER: Optional[PcpReviserGpt52] = None
+
+
+def _get_similarity_evaluator() -> SimilarityEvaluatorBgeM3:
+    global _SIMILARITY_EVALUATOR
+    if _SIMILARITY_EVALUATOR is None:
+        _SIMILARITY_EVALUATOR = SimilarityEvaluatorBgeM3()
+    return _SIMILARITY_EVALUATOR
+
+
+def _get_pcp_reviser() -> PcpReviserGpt52:
+    global _PCP_REVISER
+    if _PCP_REVISER is None:
+        _PCP_REVISER = PcpReviserGpt52()
+    return _PCP_REVISER
+
+
+def _predict_from_pcp_prompt(pcp_prompt: str) -> str:
+    class PredictSentence(BaseModel):
+        predict_sentence: str
+
+    response = client.beta.chat.completions.parse(
+        model="gpt-5",
+        reasoning_effort="low",
+        messages=[{"role": "user", "content": pcp_prompt}],
+        response_format=PredictSentence,
+    )
+    return response.choices[0].message.parsed.predict_sentence.strip()
+
+
+def run_feedback_loop(
+    essay_id: str,
+    user_judgment: str,
+    user_original_sentence: Optional[str],
+) -> Dict[str, Any]:
+    """Run one iteration of the feedback loop for a given essay."""
+    normalized_judgment = (user_judgment or "").strip().lower()
+    if normalized_judgment not in {"ok", "not ok"}:
+        raise ValueError("user_judgment must be 'ok' or 'not ok'.")
+
+    state = _FEEDBACK_STATE.get(str(essay_id))
+    if not state:
+        raise ValueError("No previous prediction found for this essay_id. Run prediction first.")
+
+    iteration = int(state.get("iteration", 0))
+    prev_pred = state.get("predicted_sentence", "")
+    prev_pcp = state.get("pcp_prompt", "")
+    ctx_summary = state.get("context_summary", {})
+
+    if normalized_judgment == "ok":
+        record = {
+            "essay_id": essay_id,
+            "iteration": iteration,
+            "status": "final",
+            "predicted_sentence": prev_pred,
+            "judgment": "ok",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        _append_feedback_log(record)
+        return {
+            "status": "final",
+            "predicted_sentence": prev_pred,
+            "iteration": iteration,
+            "similarity_score": None,
+            "revision_rationale": None,
+            "revised_pcp_prompt": None,
+        }
+
+    if not user_original_sentence or not user_original_sentence.strip():
+        raise ValueError("user_original_sentence is required when judgment is 'not ok'.")
+
+    if iteration >= MAX_FEEDBACK_RETRY:
+        return {
+            "status": "final",
+            "predicted_sentence": prev_pred,
+            "iteration": iteration,
+            "similarity_score": None,
+            "revision_rationale": None,
+            "revised_pcp_prompt": None,
+        }
+
+    evaluator = _get_similarity_evaluator()
+    similarity_score = evaluator.score(prev_pred, user_original_sentence.strip())
+
+    reviser = _get_pcp_reviser()
+    revision = reviser.revise(
+        prev_pcp=prev_pcp,
+        prev_pred=prev_pred,
+        original=user_original_sentence.strip(),
+        score=similarity_score,
+        ctx=ctx_summary,
+    )
+    revised_pcp = revision["revised_pcp_prompt"]
+    rationale = revision["short_revision_rationale"]
+
+    new_predicted_sentence = _predict_from_pcp_prompt(revised_pcp)
+    iteration += 1
+
+    state.update(
+        {
+            "predicted_sentence": new_predicted_sentence,
+            "pcp_prompt": revised_pcp,
+            "iteration": iteration,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    record = {
+        "essay_id": essay_id,
+        "iteration": iteration,
+        "status": "need_judgment" if iteration < MAX_FEEDBACK_RETRY else "final",
+        "prev_predicted_sentence": prev_pred,
+        "user_original_sentence": user_original_sentence.strip(),
+        "embedding_model": evaluator.embedding_model,
+        "similarity_score": similarity_score,
+        "revision_rationale": rationale,
+        "revised_pcp_prompt": revised_pcp,
+        "new_predicted_sentence": new_predicted_sentence,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    _append_feedback_log(record)
+
+    return {
+        "status": "need_judgment" if iteration < MAX_FEEDBACK_RETRY else "final",
+        "predicted_sentence": new_predicted_sentence,
+        "iteration": iteration,
+        "similarity_score": similarity_score,
+        "revision_rationale": rationale,
+        "revised_pcp_prompt": revised_pcp,
+    }
 
 

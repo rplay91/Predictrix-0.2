@@ -18,7 +18,7 @@ from index_api import get_user_essays
 from test_api import check_pretest_status, initialize_pretest_essay, update_pretest_essay_content, check_posttest_status, initialize_posttest_essay
 from hw_writing_api import check_hw1_status, check_hw2_status, load_hw_data, save_hw_content, reset_hw, submit_hw, get_history_essays_content, save_prediction_result, update_prediction_check_count
 from hw_setup_api import analyze_image, initialize_homework1_essay, initialize_homework2_essay, save_hw_images
-from predict_api import get_predict_sentence
+from predict_api import get_predict_sentence, run_feedback_loop
 from show_essay_api import update_review_count
 from teacher_index_api import get_all_essay_list
 
@@ -297,6 +297,11 @@ class PredictRequest(BaseModel):
     images_info: List[dict]
     title: str
 
+class FeedbackRequest(BaseModel):
+    essay_id: int
+    user_judgment: str
+    user_original_sentence: str | None = None
+
 
 # predicting sentences 
 @app.post("/predict_sentence")
@@ -319,6 +324,24 @@ async def api_predict_sentence(predict_request: PredictRequest):
             "success": True,
             "predict_sentence": result,
             "predict_prompt": user_prompt
+        })
+    except Exception as e:
+        return JSONResponse(
+            content={"success": False, "error": str(e)},
+            status_code=500
+        )
+
+@app.post("/predict_feedback")
+async def api_predict_feedback(feedback_request: FeedbackRequest):
+    try:
+        result = run_feedback_loop(
+            essay_id=str(feedback_request.essay_id),
+            user_judgment=feedback_request.user_judgment,
+            user_original_sentence=feedback_request.user_original_sentence,
+        )
+        return JSONResponse(content={
+            "success": True,
+            **result
         })
     except Exception as e:
         return JSONResponse(
