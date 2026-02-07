@@ -14,6 +14,10 @@
 
   const predictionResult = document.getElementById("predictionResult");
   const promptPreview = document.getElementById("promptPreview");
+  const bestWeightedTotal = document.getElementById("bestWeightedTotal");
+  const bestVerdict = document.getElementById("bestVerdict");
+  const bestSelectedIndex = document.getElementById("bestSelectedIndex");
+  const selfImproveDebugLog = document.getElementById("selfImproveDebugLog");
   const feedbackJudgment = document.getElementById("feedbackJudgment");
   const feedbackOriginalSentence = document.getElementById("feedbackOriginalSentence");
   const feedbackBtn = document.getElementById("feedbackBtn");
@@ -676,6 +680,24 @@
         }
         if (promptPreview) {
           promptPreview.value = result.predict_prompt ?? "";
+        }
+        if (bestWeightedTotal) {
+          bestWeightedTotal.value =
+            result.best_score_summary?.weighted_total === undefined ||
+            result.best_score_summary?.weighted_total === null
+              ? ""
+              : Number(result.best_score_summary.weighted_total).toFixed(4);
+        }
+        if (bestVerdict) {
+          bestVerdict.value = result.best_score_summary?.verdict ?? "";
+        }
+        if (bestSelectedIndex) {
+          bestSelectedIndex.value = result.debug_log?.selected_index ?? "";
+        }
+        if (selfImproveDebugLog) {
+          selfImproveDebugLog.value = result.debug_log
+            ? JSON.stringify(result.debug_log, null, 2)
+            : "";
         }
         setStatus(homeworkStatus, "Prediction generated successfully.", "success");
       } else {

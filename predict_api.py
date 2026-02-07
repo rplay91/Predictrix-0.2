@@ -1,6 +1,6 @@
 from openai import OpenAI
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Literal
 import asyncio
 import time
 import re
@@ -22,6 +22,122 @@ client = OpenAI(api_key=GPT_API_KEY)
 MAX_FEEDBACK_RETRY = 3
 FEEDBACK_LOG_PATH = "feedback_iterations.jsonl"
 _FEEDBACK_STATE: Dict[str, Dict[str, Any]] = {}
+
+RUBRIC_WEIGHTS: Dict[str, float] = {
+    "topic_relevance": 0.22,
+    "fluency": 0.20,
+    "redundancy_check": 0.18,
+    "logical_accuracy": 0.20,
+    "contextual_consistency": 0.20,
+}
+
+RUBRIC_CATEGORIES = list(RUBRIC_WEIGHTS.keys())
+
+JUDGE_PROMPT_TEMPLATE = """Essay Title:
+{title}
+
+Contextual Information:
+{contextual_information}
+
+Surrounding text before [PREDICTED SENTENCE] (last 2-4 sentences):
+{prev_sentences}
+
+Next sentence after [PREDICTED SENTENCE]:
+{next_sentence}
+
+Candidate predicted sentence:
+{candidate}
+
+Rubric:
+
+Topic Relevance
+- Topic Adherence: supports essay core topic from title/context.
+- Role Clarity: clear role (introducing idea, evidence, transition, summary).
+- Relevance: avoids tangential ideas.
+Score 0-10.
+
+Fluency
+- Seamless Connection: connects with surrounding sentences.
+- Transition Quality: transition phrasing helps flow.
+- Coherence: maintains logical progression.
+Score 0-10.
+
+Redundancy Check
+- Uniqueness: avoids repeating/paraphrasing existing ideas.
+- Semantic Originality: avoids semantic duplication.
+- Value Addition: contributes new meaningful content.
+Score 0-10.
+
+Logical Accuracy
+- Factual Accuracy: no false/unsupported claims.
+- Consistency: no contradiction with essay facts.
+- Detail Precision: key details stay accurate.
+Score 0-10.
+
+Contextual Consistency
+- Setting Alignment: matches established setting and tone.
+- Contextual Information Usage: uses context appropriately.
+- Environmental Consistency: respects established context.
+Score 0-10.
+
+Return JSON only with:
+- scores (5 categories)
+- issues (specific weaknesses)
+- prompt_revision_goal (one concise goal)
+"""
+
+SELF_IMPROVER_PROMPT_TEMPLATE = """Current prompt_snapshot:
+<<<
+{prompt_snapshot}
+>>>
+
+Predicted sentence from current prompt_snapshot:
+{predicted_sentence}
+
+Judge JSON:
+{judge_json}
+
+Task:
+- Revise ONLY the prompt snapshot used by next-sentence generation.
+- Do NOT rewrite the predicted sentence directly.
+- Keep essay facts unchanged and do not add new factual claims/statistics.
+- Apply targeted edits based on judge issues and prompt_revision_goal.
+- Return strict JSON only with:
+  - revised_prompt_snapshot (string)
+  - diff_summary (list of short strings)
+"""
+
+
+class RubricScores(BaseModel):
+    topic_relevance: float = Field(ge=0, le=10)
+    fluency: float = Field(ge=0, le=10)
+    redundancy_check: float = Field(ge=0, le=10)
+    logical_accuracy: float = Field(ge=0, le=10)
+    contextual_consistency: float = Field(ge=0, le=10)
+
+
+class JudgeIssue(BaseModel):
+    category: Literal[
+        "topic_relevance",
+        "fluency",
+        "redundancy_check",
+        "logical_accuracy",
+        "contextual_consistency",
+    ]
+    severity: Literal["high", "medium", "low"]
+    reason: str
+    fix_hint: str
+
+
+class JudgeOutput(BaseModel):
+    scores: RubricScores
+    issues: List[JudgeIssue] = Field(default_factory=list)
+    prompt_revision_goal: str
+
+
+class SelfImproverOutput(BaseModel):
+    revised_prompt_snapshot: str
+    diff_summary: List[str] = Field(default_factory=list)
 
 
 ## add the reasoning Prompt for the component
@@ -429,6 +545,21 @@ Question: {query}
         return "No related information."
     except Exception as e:
         return f"Error during RAG search: {str(e)}"
+
+
+async def answer_from_history_batch(queries: List[str]) -> Dict[str, str]:
+    """Run historical retrieval for multiple queries concurrently."""
+    if not queries:
+        return {}
+    tasks = [answer_from_history(query) for query in queries]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    output: Dict[str, str] = {}
+    for query, result in zip(queries, results):
+        if isinstance(result, Exception):
+            output[query] = f"Error during RAG search: {str(result)}"
+        else:
+            output[query] = str(result)
+    return output
     
     ## REASONING COMPONENT ###
  
@@ -475,6 +606,24 @@ Question: {query}
 
     print(query_answer_from_current)
     return str(query_answer_from_current)
+
+
+async def answer_from_current_batch(current_writing_content: str, queries: List[str]) -> Dict[str, str]:
+    """Run current-essay answer extraction for multiple queries concurrently."""
+    if not queries:
+        return {}
+    tasks = [
+        asyncio.to_thread(answer_from_current, current_writing_content, query)
+        for query in queries
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    output: Dict[str, str] = {}
+    for query, result in zip(queries, results):
+        if isinstance(result, Exception):
+            output[query] = f"Error during current essay search: {str(result)}"
+        else:
+            output[query] = str(result)
+    return output
 
 # Identify sentence patterns using current and historical essays
 def identify_sentence_pattern(current_writing_content, history_content, best_match_writing_purpose):
@@ -1099,7 +1248,7 @@ async def get_predict_sentence(
     history_essay_content: str,
     images_info: List[dict],
     title: str,
-) -> tuple[str, str]:
+) -> tuple[str, str, Dict[str, Any]]:
     start_time = time.time()  # Start time
     try:
         timeout = 100  # seconds
@@ -1133,23 +1282,29 @@ async def get_predict_sentence(
                 raise ValueError("Failed to generate guiding questions for retrieval.")
             print(f"[DEBUG] Question generation took {time.time() - query_start:.2f} s")
 
-            # 4. Retrieve answers from history
-            history_start = time.time()
+            # 4 & 5. Retrieve history/current answers concurrently (batch)
+            batch_start = time.time()
+            history_task = asyncio.create_task(answer_from_history_batch(query_list))
+            current_task = asyncio.create_task(answer_from_current_batch(current_essay_content, query_list))
+            history_answers, current_answers = await asyncio.gather(history_task, current_task)
+
             answer_from_history_list = ""
             for query in query_list:
-                query_answer_from_history = await answer_from_history(query)
-                if query_answer_from_history != "I am sorry but I am unable to answer this question given the provided data.":
+                query_answer_from_history = history_answers.get(query, "No related information.")
+                if query_answer_from_history not in {
+                    "I am sorry but I am unable to answer this question given the provided data.",
+                    "No related information.",
+                }:
                     answer_from_history_list += f"Question: {query}\nAnswer: {query_answer_from_history}\n\n"
-            print(f"[DEBUG] Historical retrieval took {time.time() - history_start:.2f} s")
 
-            # 5. Retrieve answers from current essay
-            current_start = time.time()
             answer_from_current_list = ""
             for query in query_list:
-                query_answer_from_current = answer_from_current(current_essay_content, query)
+                query_answer_from_current = current_answers.get(query, "No related information.")
                 if query_answer_from_current != "No related information.":
                     answer_from_current_list += f"Question: {query}\nAnswer: {query_answer_from_current}\n\n"
-            print(f"[DEBUG] Current-essay retrieval took {time.time() - current_start:.2f} s")
+
+            elapsed = time.time() - batch_start
+            print(f"[DEBUG] Batch retrieval (history + current) took {elapsed:.2f} s")
 
             # 6. Retrieve or create sentence pattern
             pattern_start = time.time()
@@ -1207,20 +1362,44 @@ async def get_predict_sentence(
                 },
                 "contextual_information": context_info,
             }
+            self_improve_result = run_prompt_self_improve(
+                context=context_summary,
+                prompt_snapshot_v0=user_prompt,
+                initial_prediction=final_predict_sentence,
+            )
+            final_predict_sentence = self_improve_result["best_predicted_sentence"]
+            user_prompt = self_improve_result["best_prompt_snapshot"]
+
+            print(
+                "[DEBUG] Prompt self-improve selected prediction "
+                f"with weighted_total={self_improve_result['best_score_summary']['weighted_total']:.4f} "
+                f"verdict={self_improve_result['best_score_summary']['verdict']}"
+            )
+            _append_feedback_log(
+                {
+                    "essay_id": str(eid),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "event": "prompt_self_improve",
+                    "result": self_improve_result,
+                }
+            )
             _cache_feedback_state(
                 essay_id=str(eid),
                 predicted_sentence=final_predict_sentence,
                 pcp_prompt=user_prompt,
                 context_summary=context_summary,
+                self_improve_result=self_improve_result,
             )
 
-            return final_predict_sentence, user_prompt
+            return final_predict_sentence, user_prompt, self_improve_result
 
         # Run all steps with timeout protection
-        final_predict_sentence, user_prompt = await asyncio.wait_for(predict_with_timeout(), timeout=timeout)
+        final_predict_sentence, user_prompt, self_improve_result = await asyncio.wait_for(
+            predict_with_timeout(), timeout=timeout
+        )
         print(f"[DEBUG] Total prediction time: {time.time() - start_time:.2f} s")
 
-        return final_predict_sentence, user_prompt
+        return final_predict_sentence, user_prompt, self_improve_result
 
     except asyncio.TimeoutError:
         print(f"[WARNING] Prediction timed out after {time.time() - start_time:.2f} s")
@@ -1236,11 +1415,13 @@ def _cache_feedback_state(
     predicted_sentence: str,
     pcp_prompt: str,
     context_summary: Dict[str, Any],
+    self_improve_result: Optional[Dict[str, Any]] = None,
 ) -> None:
     _FEEDBACK_STATE[str(essay_id)] = {
         "predicted_sentence": predicted_sentence,
         "pcp_prompt": pcp_prompt,
         "context_summary": context_summary,
+        "self_improve_result": self_improve_result,
         "iteration": 0,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -1254,6 +1435,301 @@ def _append_feedback_log(record: Dict[str, Any]) -> None:
         print(f"[WARNING] Failed to persist feedback iteration: {exc}")
 
 
+def _split_sentences(text: str) -> List[str]:
+    if not text:
+        return []
+    chunks = re.split(r"(?<=[.!?])\s+", text.strip())
+    return [chunk.strip() for chunk in chunks if chunk and chunk.strip()]
+
+
+def _extract_surrounding_text(current_window: str) -> Dict[str, str]:
+    marker = "[PREDICTED SENTENCE]"
+    alt_marker = "[PREDICTED_SENTENCE]"
+    if marker in current_window:
+        before_text, after_text = current_window.split(marker, 1)
+    elif alt_marker in current_window:
+        before_text, after_text = current_window.split(alt_marker, 1)
+    else:
+        prev_sentences = _split_sentences(current_window)[-4:]
+        return {
+            "prev_sentences": "\n".join(f"- {s}" for s in prev_sentences) if prev_sentences else "No previous sentences.",
+            "next_sentence": "no next sentence",
+        }
+    
+    prev_sentences_list = _split_sentences(before_text)[-4:]
+    next_sentences_list = _split_sentences(after_text)
+    next_sentence = next_sentences_list[0] if next_sentences_list else "no next sentence"
+
+    return {
+        "prev_sentences": "\n".join(f"- {s}" for s in prev_sentences_list) if prev_sentences_list else "No previous sentences.",
+        "next_sentence": next_sentence,
+    }
+
+
+def _compute_weighted_total(scores: Dict[str, float]) -> float:
+    total = 0.0
+    for category, weight in RUBRIC_WEIGHTS.items():
+        total += float(scores.get(category, 0.0)) * weight
+    return round(total, 4)
+
+
+def _derive_verdict(scores: Dict[str, float], weighted_total: float) -> str:
+    any_below_7 = any(float(scores.get(category, 0.0)) < 7.0 for category in RUBRIC_CATEGORIES)
+    if weighted_total < 7.0 or float(scores.get("logical_accuracy", 0.0)) < 6.0:
+        return "reject"
+    if weighted_total >= 8.2 and not any_below_7:
+        return "accept"
+    return "revise"
+
+
+def _normalize_judge_payload(payload: JudgeOutput) -> Dict[str, Any]:
+    scores = payload.scores.model_dump()
+    weighted_total = _compute_weighted_total(scores)
+    verdict = _derive_verdict(scores, weighted_total)
+
+    normalized_issues = []
+    for issue in payload.issues:
+        normalized_issues.append(
+            {
+                "category": issue.category,
+                "severity": issue.severity,
+                "reason": issue.reason.strip(),
+                "fix_hint": issue.fix_hint.strip(),
+            }
+        )
+
+    prompt_revision_goal = payload.prompt_revision_goal.strip() or "Improve rubric weaknesses while keeping topic and style consistent."
+    return {
+        "scores": scores,
+        "weighted_total": weighted_total,
+        "verdict": verdict,
+        "issues": normalized_issues,
+        "prompt_revision_goal": prompt_revision_goal,
+    }
+
+
+def _call_structured_with_retry(
+    *,
+    system_prompt: str,
+    user_prompt: str,
+    response_model: Any,
+    model: str = "gpt-5-nano-2025-08-07",
+):
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    last_error: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            response = client.beta.chat.completions.parse(
+                model=model,
+                reasoning_effort="low",
+                messages=messages,
+                response_format=response_model,
+            )
+            parsed = response.choices[0].message.parsed
+            if parsed is None:
+                raise ValueError("Structured response is empty.")
+            return parsed
+        except Exception as exc:
+            last_error = exc
+            if attempt == 0:
+                messages.append({"role": "user", "content": "Return valid JSON only."})
+                continue
+    raise RuntimeError(f"Structured model call failed: {last_error}")
+
+
+def judge_prediction(context: Dict[str, Any], predicted_sentence: str) -> Dict[str, Any]:
+    """Evaluate a candidate predicted sentence using structured rubric output."""
+    title = str(context.get("title", "")).strip()
+    contextual_information = str(context.get("contextual_information", "")).strip()
+    current_window = str(context.get("current_window", "")).strip()
+    extracted = _extract_surrounding_text(current_window)
+
+    user_prompt = JUDGE_PROMPT_TEMPLATE.format(
+        title=title or "Untitled",
+        contextual_information=contextual_information or "No contextual information provided.",
+        prev_sentences=extracted["prev_sentences"],
+        next_sentence=extracted["next_sentence"],
+        candidate=predicted_sentence.strip(),
+    )
+
+    system_prompt = (
+        "You are a strict rubric evaluator for an EFL essay next-sentence prediction. "
+        "Return only JSON exactly following the schema."
+    )
+
+    raw = _call_structured_with_retry(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        response_model=JudgeOutput,
+    )
+    normalized = _normalize_judge_payload(raw)
+    return normalized
+
+
+def revise_prompt_snapshot(prompt_snapshot: str, judge_json: Dict[str, Any]) -> Dict[str, Any]:
+    """Revise only the prompt snapshot based on rubric feedback."""
+    judge_payload = dict(judge_json)
+    predicted_sentence = str(judge_payload.pop("_predicted_sentence", "")).strip()
+    judge_text = json.dumps(judge_payload, ensure_ascii=True, indent=2)
+
+    user_prompt = SELF_IMPROVER_PROMPT_TEMPLATE.format(
+        prompt_snapshot=prompt_snapshot,
+        predicted_sentence=predicted_sentence,
+        judge_json=judge_text,
+    )
+    system_prompt = (
+        "You revise the prompt snapshot used by a next-sentence generator. "
+        "You do NOT rewrite the sentence. Return JSON only."
+    )
+
+    def _forced_delta_snapshot(base_prompt: str, judge_data: Dict[str, Any], revision_label: str) -> Dict[str, Any]:
+        goal = str(judge_data.get("prompt_revision_goal", "")).strip()
+        issues = judge_data.get("issues", [])
+        hints: List[str] = []
+        if isinstance(issues, list):
+            for issue in issues[:3]:
+                if isinstance(issue, dict):
+                    hint = str(issue.get("fix_hint", "")).strip()
+                    if hint:
+                        hints.append(hint)
+        extra_lines = [f"- Revision label: {revision_label}"]
+        if goal:
+            extra_lines.append(f"- Priority goal: {goal}")
+        for idx, hint in enumerate(hints, start=1):
+            extra_lines.append(f"- Fix hint {idx}: {hint}")
+
+        forced_block = (
+            "\n\n# Revision Focus\n"
+            "Apply the following targeted constraints in the next generation:\n"
+            + "\n".join(extra_lines)
+            + "\n"
+        )
+        revised = base_prompt.rstrip() + forced_block
+        return {
+            "revised_prompt_snapshot": revised,
+            "diff_summary": [
+                "Added explicit revision-focus block to enforce targeted prompt changes.",
+                f"Embedded revision label: {revision_label}.",
+            ],
+        }
+
+    try:
+        raw = _call_structured_with_retry(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_model=SelfImproverOutput,
+        )
+        revised_prompt_snapshot = raw.revised_prompt_snapshot.strip()
+        diff_summary = raw.diff_summary
+        if not revised_prompt_snapshot:
+            raise ValueError("Missing revised_prompt_snapshot.")
+        if revised_prompt_snapshot == prompt_snapshot.strip():
+            fallback = _forced_delta_snapshot(prompt_snapshot, judge_payload, "auto-forced-change")
+            fallback["diff_summary"].insert(0, "Model returned unchanged prompt; forced minimal targeted delta.")
+            return fallback
+        clean_diff_summary = [str(item).strip() for item in diff_summary if str(item).strip()]
+        if not clean_diff_summary:
+            clean_diff_summary = ["Prompt snapshot revised with targeted constraints from rubric feedback."]
+        return {
+            "revised_prompt_snapshot": revised_prompt_snapshot,
+            "diff_summary": clean_diff_summary,
+        }
+    except Exception as exc:
+        print(f"[WARNING] SelfImprover failed, creating forced revision block: {exc}")
+        fallback = _forced_delta_snapshot(prompt_snapshot, judge_payload, "fallback-after-error")
+        fallback["diff_summary"].insert(0, "Fallback due to JSON/parse failure.")
+        return fallback
+
+
+def _prediction_rank_key(candidate: Dict[str, Any]) -> tuple:
+    judge = candidate["judge"]
+    scores = judge["scores"]
+    return (
+        float(judge.get("weighted_total", 0.0)),
+        float(scores.get("topic_relevance", 0.0)),
+        float(scores.get("contextual_consistency", 0.0)),
+        float(scores.get("logical_accuracy", 0.0)),
+    )
+
+
+def run_prompt_self_improve(
+    context: Dict[str, Any],
+    prompt_snapshot_v0: str,
+    initial_prediction: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Run 3-step prompt-snapshot self-improvement:
+    predict -> judge -> revise prompt, repeated twice, then select the best.
+    """
+    if not prompt_snapshot_v0 or not prompt_snapshot_v0.strip():
+        raise ValueError("prompt_snapshot_v0 is required.")
+
+    prompt_v0 = prompt_snapshot_v0
+    pred1 = initial_prediction.strip() if initial_prediction else _predict_from_pcp_prompt(prompt_v0)
+    judge1 = judge_prediction(context, pred1)
+    judge1["_predicted_sentence"] = pred1
+
+    revise1 = revise_prompt_snapshot(prompt_v0, judge1)
+    prompt_v1 = revise1["revised_prompt_snapshot"]
+    pred2 = _predict_from_pcp_prompt(prompt_v1)
+    judge2 = judge_prediction(context, pred2)
+    judge2["_predicted_sentence"] = pred2
+
+    revise2 = revise_prompt_snapshot(prompt_v1, judge2)
+    prompt_v2 = revise2["revised_prompt_snapshot"]
+    pred3 = _predict_from_pcp_prompt(prompt_v2)
+    judge3 = judge_prediction(context, pred3)
+    judge3["_predicted_sentence"] = pred3
+
+    candidates = [
+        {
+            "index": 1,
+            "prompt_snapshot": prompt_v0,
+            "predicted_sentence": pred1,
+            "judge": judge1,
+            "diff_summary": revise1["diff_summary"],
+            "next_prompt_snapshot": prompt_v1,
+        },
+        {
+            "index": 2,
+            "prompt_snapshot": prompt_v1,
+            "predicted_sentence": pred2,
+            "judge": judge2,
+            "diff_summary": revise2["diff_summary"],
+            "next_prompt_snapshot": prompt_v2,
+        },
+        {
+            "index": 3,
+            "prompt_snapshot": prompt_v2,
+            "predicted_sentence": pred3,
+            "judge": judge3,
+            "diff_summary": [],
+            "next_prompt_snapshot": None,
+        },
+    ]
+    best_candidate = max(candidates, key=_prediction_rank_key)
+
+    debug_log = {
+        "iterations": candidates,
+        "selected_index": best_candidate["index"],
+    }
+
+    return {
+        "best_predicted_sentence": best_candidate["predicted_sentence"],
+        "best_score_summary": {
+            "scores": best_candidate["judge"]["scores"],
+            "weighted_total": best_candidate["judge"]["weighted_total"],
+            "verdict": best_candidate["judge"]["verdict"],
+        },
+        "best_prompt_snapshot": best_candidate["prompt_snapshot"],
+        "debug_log": debug_log,
+    }
+
+## user judgement ###
 class SimilarityEvaluatorBgeM3:
     """Evaluate similarity using BGE-M3 embeddings with a TF-IDF fallback."""
 
@@ -1440,6 +1916,8 @@ def _predict_from_pcp_prompt(pcp_prompt: str) -> str:
     return response.choices[0].message.parsed.predict_sentence.strip()
 
 
+
+## user judgement ###
 def run_feedback_loop(
     essay_id: str,
     user_judgment: str,

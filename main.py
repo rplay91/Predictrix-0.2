@@ -311,7 +311,7 @@ async def api_predict_sentence(predict_request: PredictRequest):
         sid = predict_request.sid
         eid = predict_request.eid
 
-        result, user_prompt = await get_predict_sentence(
+        result, user_prompt, self_improve_result = await get_predict_sentence(
             sid=sid,
             eid=eid,
             current_essay_content=predict_request.current_essay_content,
@@ -323,7 +323,9 @@ async def api_predict_sentence(predict_request: PredictRequest):
         return JSONResponse(content={
             "success": True,
             "predict_sentence": result,
-            "predict_prompt": user_prompt
+            "predict_prompt": user_prompt,
+            "best_score_summary": (self_improve_result or {}).get("best_score_summary"),
+            "debug_log": (self_improve_result or {}).get("debug_log"),
         })
     except Exception as e:
         return JSONResponse(
