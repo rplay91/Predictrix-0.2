@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   const sidInput = document.getElementById("sidInput");
   const historyContent = document.getElementById("historyContent");
   const historyStatus = document.getElementById("historyStatus");
@@ -109,7 +109,7 @@
 
     if (!file) {
       clearImageEntryFile(index);
-      setImageStatus(index, "Image selection cleared.");
+      setImageStatus(index, "Pilihan gambar dibersihkan.");
       renderImages();
       return;
     }
@@ -117,7 +117,7 @@
     if (!file.type.startsWith("image/")) {
       setImageStatus(
         index,
-        "Only image files (PNG, JPG, WEBP) are supported.",
+        "Hanya file gambar (PNG, JPG, WEBP) yang didukung.",
         "danger"
       );
       clearImageEntryFile(index);
@@ -129,7 +129,7 @@
     if (file.size > maxBytes) {
       setImageStatus(
         index,
-        `Image must be smaller than ${MAX_IMAGE_SIZE_MB} MB.`,
+        `Ukuran gambar harus lebih kecil dari ${MAX_IMAGE_SIZE_MB} MB.`,
         "danger"
       );
       clearImageEntryFile(index);
@@ -144,12 +144,12 @@
       entry.previewUrl = typeof reader.result === "string" ? reader.result : "";
       setImageStatus(
         index,
-        "Image loaded. You can analyze it to extract keywords."
+        "Gambar berhasil dimuat. Anda dapat menganalisisnya untuk mengambil kata kunci."
       );
       renderImages();
     };
     reader.onerror = () => {
-      setImageStatus(index, "Failed to read image file.", "danger");
+      setImageStatus(index, "Gagal membaca file gambar.", "danger");
       clearImageEntryFile(index);
       renderImages();
     };
@@ -165,7 +165,7 @@
     if (!entry.file) {
       setImageStatus(
         index,
-        "Select an image before running analysis.",
+        "Pilih gambar sebelum menjalankan analisis.",
         "warning"
       );
       renderImages();
@@ -175,9 +175,9 @@
     const originalHtml = analyzeButton.innerHTML;
     analyzeButton.disabled = true;
     analyzeButton.innerHTML =
-      '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Analyzing...';
+      '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Menganalisis...';
 
-    setImageStatus(index, "Analyzing image...", "muted");
+    setImageStatus(index, "Sedang menganalisis gambar...", "muted");
 
     try {
       const formData = new FormData();
@@ -215,13 +215,13 @@
       entry.description = description;
       setImageStatus(
         index,
-        "Analysis complete. Review and adjust if needed.",
+        "Analisis selesai. Tinjau dan sesuaikan bila diperlukan.",
         "success"
       );
     } catch (err) {
       setImageStatus(
         index,
-        err?.message || "Failed to analyze image. Please try again.",
+        err?.message || "Gagal menganalisis gambar. Silakan coba lagi.",
         "danger"
       );
     } finally {
@@ -283,7 +283,7 @@
       clearBtn.addEventListener("click", () => {
         fileInput.value = "";
         clearImageEntryFile(index);
-        setImageStatus(index, "Image selection cleared.");
+        setImageStatus(index, "Pilihan gambar dibersihkan.");
         renderImages();
       });
     }
@@ -302,7 +302,7 @@
     if (!cachedImages.length) {
       const emptyState = document.createElement("div");
       emptyState.className = "text-muted small fst-italic";
-      emptyState.textContent = "No image context added.";
+      emptyState.textContent = "Belum ada konteks gambar yang ditambahkan.";
       imagesContainer.appendChild(emptyState);
       syncImagesTextarea();
       return;
@@ -316,11 +316,11 @@
       const statusClass = getStatusClass(image.statusTone);
       wrapper.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-2">
-          <span class="fw-semibold">Image Context ${index + 1}</span>
+          <span class="fw-semibold">Konteks Gambar ${index + 1}</span>
           <button
             type="button"
             class="btn btn-outline-danger btn-sm image-remove-btn"
-            aria-label="Remove image context"
+            aria-label="Hapus konteks gambar"
           >
             <i class="fa-solid fa-trash-can"></i>
           </button>
@@ -336,8 +336,8 @@
                   hasPreview
                     ? `<img src="${escapeHtml(
                         image.previewUrl
-                      )}" alt="Preview" class="img-fluid">`
-                    : '<div class="text-muted small text-center"><i class="fa-solid fa-image fa-2x mb-1"></i><div>No image selected</div></div>'
+                      )}" alt="Pratinjau" class="img-fluid">`
+                    : '<div class="text-muted small text-center"><i class="fa-solid fa-image fa-2x mb-1"></i><div>Belum ada gambar dipilih</div></div>'
                 }
               </div>
               <input
@@ -350,28 +350,28 @@
                   type="button"
                   class="btn btn-outline-primary btn-sm image-upload-btn"
                 >
-                  <i class="fa-solid fa-upload me-1"></i>Select Image
+                  <i class="fa-solid fa-upload me-1"></i>Pilih Gambar
                 </button>
                 <button
                   type="button"
                   class="btn btn-outline-secondary btn-sm image-clear-btn"
                   ${image.file ? "" : "disabled"}
                 >
-                  <i class="fa-solid fa-xmark me-1"></i>Remove Image
+                  <i class="fa-solid fa-xmark me-1"></i>Hapus Gambar
                 </button>
                 <button
                   type="button"
                   class="btn btn-outline-info btn-sm image-analyze-btn"
                   ${image.file ? "" : "disabled"}
                 >
-                  <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Analyze Image
+                  <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Analisis Gambar
                 </button>
               </div>
               <div class="small text-muted mt-2 image-file-name">
                 ${
                   image.fileName
                     ? escapeHtml(image.fileName)
-                    : "No file selected"
+                    : "Belum ada file dipilih"
                 }
               </div>
               <div class="small mt-1 image-status ${statusClass}">
@@ -384,18 +384,18 @@
             </div>
           </div>
           <div class="col-md-8">
-            <label class="form-label small fw-semibold mb-1">Keywords</label>
+            <label class="form-label small fw-semibold mb-1">Kata Kunci</label>
             <input
               type="text"
               class="form-control form-control-sm image-keywords"
-              placeholder="Comma-separated keywords"
+              placeholder="Kata kunci dipisahkan dengan koma"
             />
             <div class="mt-2">
-              <label class="form-label small fw-semibold mb-1">Description</label>
+              <label class="form-label small fw-semibold mb-1">Deskripsi</label>
               <textarea
                 class="form-control form-control-sm image-description"
                 rows="3"
-                placeholder="Short description of the image"
+                placeholder="Deskripsi singkat gambar"
               ></textarea>
             </div>
           </div>
@@ -461,7 +461,7 @@
   function requireSid() {
     const sid = sidInput.value.trim();
     if (!sid) {
-      throw new Error("Student ID is required.");
+      throw new Error("ID siswa wajib diisi.");
     }
     return sid;
   }
@@ -469,11 +469,11 @@
   function requireEid() {
     const eidRaw = eidInput.value.trim();
     if (!eidRaw) {
-      throw new Error("Essay ID (EID) is required.");
+      throw new Error("ID esai (EID) wajib diisi.");
     }
     const eid = Number(eidRaw);
     if (!Number.isInteger(eid) || eid <= 0) {
-      throw new Error("Essay ID must be a positive integer.");
+      throw new Error("ID esai harus berupa bilangan bulat positif.");
     }
     return eid;
   }
@@ -504,16 +504,16 @@
   loadHistoryBtn.addEventListener("click", async () => {
     try {
       loadHistoryBtn.disabled = true;
-      setStatus(historyStatus, "Loading history essays...");
+      setStatus(historyStatus, "Sedang memuat riwayat esai...");
       const sid = requireSid();
       const result = await fetchJSON(`/get_history_essays_content/${sid}`);
       if (result.success) {
         historyContent.value = result.content ?? "";
-        setStatus(historyStatus, "History essays loaded.", "success");
+        setStatus(historyStatus, "Riwayat esai berhasil dimuat.", "success");
       } else {
         setStatus(
           historyStatus,
-          result.error || "Failed to load history essays.",
+          result.error || "Gagal memuat riwayat esai.",
           "danger"
         );
       }
@@ -527,9 +527,9 @@
   createHomeworkBtn.addEventListener("click", async () => {
     try {
       createHomeworkBtn.disabled = true;
-      setStatus(homeworkStatus, "Creating homework draft...");
+      setStatus(homeworkStatus, "Sedang membuat draf tugas...");
       const sid = requireSid();
-      const title = titleInput.value.trim() || "Homework Draft";
+      const title = titleInput.value.trim() || "Draf Tugas";
       const payload = {
         sid,
         title,
@@ -545,13 +545,13 @@
         eidInput.value = result.eid;
         setStatus(
           homeworkStatus,
-          `Homework created with EID ${result.eid}.`,
+          `Tugas berhasil dibuat dengan EID ${result.eid}.`,
           "success"
         );
       } else {
         setStatus(
           homeworkStatus,
-          result.error || "Failed to create homework.",
+          result.error || "Gagal membuat tugas.",
           "danger"
         );
       }
@@ -565,14 +565,14 @@
   loadHomeworkBtn.addEventListener("click", async () => {
     try {
       loadHomeworkBtn.disabled = true;
-      setStatus(homeworkStatus, "Loading homework data...");
+      setStatus(homeworkStatus, "Sedang memuat data tugas...");
       const eid = requireEid();
       const result = await fetchJSON(`/load_hw_data/${eid}`);
 
       if (!result.success) {
         setStatus(
           homeworkStatus,
-          result.error || "Failed to load homework data.",
+          result.error || "Gagal memuat data tugas.",
           "danger"
         );
         return;
@@ -597,7 +597,7 @@
                 ? img.modify_description
                 : "";
             if (entry.keywords.length || entry.description) {
-              entry.statusMessage = "Loaded from homework data.";
+              entry.statusMessage = "Dimuat dari data tugas.";
               entry.statusTone = "muted";
             }
             return entry;
@@ -606,7 +606,7 @@
       cachedImages = images;
       renderImages();
 
-      setStatus(homeworkStatus, "Homework data loaded.", "success");
+      setStatus(homeworkStatus, "Data tugas berhasil dimuat.", "success");
     } catch (err) {
       setStatus(homeworkStatus, err.message, "danger");
     } finally {
@@ -617,7 +617,7 @@
   saveHomeworkBtn.addEventListener("click", async () => {
     try {
       saveHomeworkBtn.disabled = true;
-      setStatus(homeworkStatus, "Saving essay content...");
+      setStatus(homeworkStatus, "Sedang menyimpan isi esai...");
       const eid = requireEid();
       const content = currentEssay.value;
       const result = await fetchJSON(`/save_hw_content/${eid}`, {
@@ -627,11 +627,11 @@
       });
 
       if (result.success) {
-        setStatus(homeworkStatus, "Essay content saved.", "success");
+        setStatus(homeworkStatus, "Isi esai berhasil disimpan.", "success");
       } else {
         setStatus(
           homeworkStatus,
-          result.error || "Failed to save essay content.",
+          result.error || "Gagal menyimpan isi esai.",
           "danger"
         );
       }
@@ -646,17 +646,17 @@
     try {
       predictBtn.disabled = true;
       predictBtn.innerHTML =
-        '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Running Prediction...';
+        '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Menjalankan Prediksi...';
 
       const sid = requireSid();
       const eid = requireEid();
       const currentContent = currentEssay.value.trim();
       const history = historyContent.value.trim();
-      const title = titleInput.value.trim() || "Homework Draft";
+      const title = titleInput.value.trim() || "Draf Tugas";
       const imagesPayload = collectImagesPayload();
 
       if (!currentContent) {
-        throw new Error("Current essay content is required for prediction.");
+        throw new Error("Isi esai saat ini wajib diisi untuk prediksi.");
       }
 
       const body = {
@@ -699,11 +699,11 @@
             ? JSON.stringify(result.debug_log, null, 2)
             : "";
         }
-        setStatus(homeworkStatus, "Prediction generated successfully.", "success");
+        setStatus(homeworkStatus, "Prediksi berhasil dibuat.", "success");
       } else {
         setStatus(
           homeworkStatus,
-          result.error || "Prediction failed.",
+          result.error || "Prediksi gagal.",
           "danger"
         );
       }
@@ -712,7 +712,7 @@
     } finally {
       predictBtn.disabled = false;
       predictBtn.innerHTML =
-        '<i class="fa-solid fa-wand-magic-sparkles me-2"></i>Generate Predict Sentence';
+        '<i class="fa-solid fa-wand-magic-sparkles me-2"></i>Buat Kalimat Prediksi';
     }
   });
 
@@ -721,7 +721,7 @@
       try {
         feedbackBtn.disabled = true;
         feedbackBtn.innerHTML =
-          '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
+          '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Mengirim...';
 
         const eid = requireEid();
         const judgment = feedbackJudgment ? feedbackJudgment.value.trim() : "";
@@ -730,13 +730,13 @@
           : "";
 
         if (!judgment) {
-          throw new Error("User judgment is required.");
+          throw new Error("Penilaian pengguna wajib diisi.");
         }
         if (judgment === "not ok" && !originalSentence) {
-          throw new Error("Original sentence is required when judgment is 'not ok'.");
+          throw new Error("Kalimat asli wajib diisi saat penilaian adalah 'not ok'.");
         }
 
-        setStatus(feedbackStatus, "Submitting feedback...");
+        setStatus(feedbackStatus, "Sedang mengirim umpan balik...");
 
         const body = {
           essay_id: eid,
@@ -775,13 +775,13 @@
 
           const statusLabel =
             result.status === "final"
-              ? "Feedback processed. Status: final."
-              : "Feedback processed. Please review and judge again.";
+              ? "Umpan balik diproses. Status: final."
+              : "Umpan balik diproses. Silakan tinjau dan nilai kembali.";
           setStatus(feedbackStatus, statusLabel, "success");
         } else {
           setStatus(
             feedbackStatus,
-            result.error || "Feedback processing failed.",
+            result.error || "Pemrosesan umpan balik gagal.",
             "danger"
           );
         }
@@ -790,10 +790,13 @@
       } finally {
         feedbackBtn.disabled = false;
         feedbackBtn.innerHTML =
-          '<i class="fa-solid fa-rotate-right me-2"></i>Submit Feedback';
+          '<i class="fa-solid fa-rotate-right me-2"></i>Kirim Umpan Balik';
       }
     });
   }
 
   renderImages();
 })();
+
+
+

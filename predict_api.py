@@ -1,23 +1,163 @@
-from openai import OpenAI
+﻿from openai import OpenAI
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
 import asyncio
 import time
 import re
-from collections import Counter
+from collections import Counter, OrderedDict
 import json
 from datetime import datetime, timezone
 import numpy as np
 import os
+import hashlib
+import threading
+from functools import partial
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 from graphRAG.global_search import search_graph
-import pymysql
 
 from api_config import GPT_API_KEY
-from db_config import DB_CONFIG
 client = OpenAI(api_key=GPT_API_KEY)
+_OPENAI_PARSE = client.beta.chat.completions.parse
+
+_PROMPT_CACHE_ENABLED = str(os.environ.get("ENABLE_PROMPT_CACHE", "1")).strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+_PROMPT_CACHE_MAX_SIZE = max(int(os.environ.get("PROMPT_CACHE_MAX_SIZE", "512")), 1)
+_PROMPT_CACHE: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+_PROMPT_CACHE_LOCK = threading.Lock()
+
+
+def _read_int_env(name: str, default: int, minimum: int = 1) -> int:
+    raw = os.environ.get(name)
+    try:
+        parsed = int(raw) if raw is not None else default
+    except (TypeError, ValueError):
+        parsed = default
+    return max(parsed, minimum)
+
+
+WRITING_PATTERN_BATCH_CHARS = _read_int_env("WRITING_PATTERN_BATCH_CHARS", 6000, minimum=1500)
+WRITING_PATTERN_BATCH_CONCURRENCY = _read_int_env("WRITING_PATTERN_BATCH_CONCURRENCY", 3, minimum=1)
+
+
+class _CachedParsedMessage:
+    def __init__(self, parsed: Any) -> None:
+        self.parsed = parsed
+
+
+class _CachedParsedChoice:
+    def __init__(self, parsed: Any) -> None:
+        self.message = _CachedParsedMessage(parsed)
+
+
+class _CachedParsedResponse:
+    def __init__(self, parsed_items: List[Any]) -> None:
+        self.choices = [_CachedParsedChoice(item) for item in parsed_items]
+
+
+def _normalize_cache_value(value: Any) -> Any:
+    if isinstance(value, type):
+        try:
+            if issubclass(value, BaseModel):
+                return {"__pydantic_model__": f"{value.__module__}.{value.__qualname__}"}
+        except TypeError:
+            pass
+        return str(value)
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if isinstance(value, dict):
+        return {
+            str(k): _normalize_cache_value(v)
+            for k, v in sorted(value.items(), key=lambda item: str(item[0]))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_normalize_cache_value(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _build_prompt_cache_key(endpoint: str, payload: Dict[str, Any]) -> str:
+    normalized_payload = _normalize_cache_value(payload)
+    encoded_payload = json.dumps(
+        normalized_payload,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(f"{endpoint}:{encoded_payload}".encode("utf-8")).hexdigest()
+
+
+def _prompt_cache_get(cache_key: str) -> Optional[Dict[str, Any]]:
+    with _PROMPT_CACHE_LOCK:
+        cached = _PROMPT_CACHE.get(cache_key)
+        if cached is None:
+            return None
+        _PROMPT_CACHE.move_to_end(cache_key)
+        return cached
+
+
+def _prompt_cache_set(cache_key: str, payload: Dict[str, Any]) -> None:
+    with _PROMPT_CACHE_LOCK:
+        _PROMPT_CACHE[cache_key] = payload
+        _PROMPT_CACHE.move_to_end(cache_key)
+        while len(_PROMPT_CACHE) > _PROMPT_CACHE_MAX_SIZE:
+            _PROMPT_CACHE.popitem(last=False)
+
+
+def _restore_cached_parsed_item(payload: Dict[str, Any], response_model: Any) -> Any:
+    data = payload.get("data")
+    if isinstance(response_model, type):
+        try:
+            if issubclass(response_model, BaseModel):
+                return response_model.model_validate(data)
+        except Exception:
+            pass
+    return data
+
+
+def _cached_chat_parse(*, use_cache: bool = True, **kwargs):
+    response_model = kwargs.get("response_format")
+    should_cache = _PROMPT_CACHE_ENABLED and use_cache and bool(kwargs.get("messages"))
+    cache_key: Optional[str] = None
+
+    if should_cache:
+        cache_key = _build_prompt_cache_key("chat.completions.parse", kwargs)
+        cached = _prompt_cache_get(cache_key)
+        if cached is not None:
+            cached_items = [
+                _restore_cached_parsed_item(item, response_model)
+                for item in cached.get("choices", [])
+            ]
+            return _CachedParsedResponse(cached_items)
+
+    request_kwargs = dict(kwargs)
+    try:
+        response = _OPENAI_PARSE(**request_kwargs)
+    except Exception as exc:
+        # Some models/endpoints reject reasoning_effort; retry without it.
+        if (
+            "Unrecognized request argument supplied: reasoning_effort" in str(exc)
+            and "reasoning_effort" in request_kwargs
+        ):
+            request_kwargs.pop("reasoning_effort", None)
+            response = _OPENAI_PARSE(**request_kwargs)
+        else:
+            raise
+
+    if should_cache and cache_key is not None:
+        cached_choices: List[Dict[str, Any]] = []
+        for choice in getattr(response, "choices", []):
+            parsed = getattr(getattr(choice, "message", None), "parsed", None)
+            cached_choices.append({"data": _normalize_cache_value(parsed)})
+        _prompt_cache_set(cache_key, {"choices": cached_choices})
+
+    return response
 
 MAX_FEEDBACK_RETRY = 3
 FEEDBACK_LOG_PATH = "feedback_iterations.jsonl"
@@ -33,78 +173,78 @@ RUBRIC_WEIGHTS: Dict[str, float] = {
 
 RUBRIC_CATEGORIES = list(RUBRIC_WEIGHTS.keys())
 
-JUDGE_PROMPT_TEMPLATE = """Essay Title:
+JUDGE_PROMPT_TEMPLATE = """Judul Esai:
 {title}
 
-Contextual Information:
+Informasi Kontekstual:
 {contextual_information}
 
-Surrounding text before [PREDICTED SENTENCE] (last 2-4 sentences):
+Teks sekitar sebelum [PREDICTED SENTENCE] (2-4 kalimat terakhir):
 {prev_sentences}
 
-Next sentence after [PREDICTED SENTENCE]:
+Kalimat setelah [PREDICTED SENTENCE]:
 {next_sentence}
 
-Candidate predicted sentence:
+Kalimat prediksi kandidat:
 {candidate}
 
-Rubric:
+Rubrik:
 
-Topic Relevance
-- Topic Adherence: supports essay core topic from title/context.
-- Role Clarity: clear role (introducing idea, evidence, transition, summary).
-- Relevance: avoids tangential ideas.
-Score 0-10.
+Relevansi Topik
+- Kesesuaian Topik: mendukung topik inti esai dari judul/konteks.
+- Kejelasan Peran: perannya jelas (memperkenalkan ide, bukti, transisi, ringkasan).
+- Relevansi: menghindari ide yang menyimpang.
+Skor 0-10.
 
-Fluency
-- Seamless Connection: connects with surrounding sentences.
-- Transition Quality: transition phrasing helps flow.
-- Coherence: maintains logical progression.
-Score 0-10.
+Kelancaran
+- Keterhubungan Mulus: terhubung dengan kalimat di sekitarnya.
+- Kualitas Transisi: frasa transisi membantu alur.
+- Koherensi: menjaga perkembangan logis.
+Skor 0-10.
 
-Redundancy Check
-- Uniqueness: avoids repeating/paraphrasing existing ideas.
-- Semantic Originality: avoids semantic duplication.
-- Value Addition: contributes new meaningful content.
-Score 0-10.
+Pemeriksaan Redundansi
+- Keunikan: menghindari pengulangan/parafrasa ide yang sudah ada.
+- Orisinalitas Semantik: menghindari duplikasi makna.
+- Nilai Tambah: memberi konten baru yang bermakna.
+Skor 0-10.
 
-Logical Accuracy
-- Factual Accuracy: no false/unsupported claims.
-- Consistency: no contradiction with essay facts.
-- Detail Precision: key details stay accurate.
-Score 0-10.
+Akurasi Logis
+- Akurasi Fakta: tidak ada klaim salah/tidak didukung.
+- Konsistensi: tidak bertentangan dengan fakta dalam esai.
+- Presisi Detail: detail penting tetap akurat.
+Skor 0-10.
 
-Contextual Consistency
-- Setting Alignment: matches established setting and tone.
-- Contextual Information Usage: uses context appropriately.
-- Environmental Consistency: respects established context.
-Score 0-10.
+Konsistensi Kontekstual
+- Kesesuaian Latar: sesuai dengan latar dan nada yang sudah ditetapkan.
+- Penggunaan Informasi Kontekstual: menggunakan konteks secara tepat.
+- Konsistensi Lingkungan: menghormati konteks yang sudah terbentuk.
+Skor 0-10.
 
-Return JSON only with:
-- scores (5 categories)
-- issues (specific weaknesses)
-- prompt_revision_goal (one concise goal)
+Kembalikan JSON saja berisi:
+- scores (5 kategori)
+- issues (kelemahan spesifik)
+- prompt_revision_goal (satu tujuan ringkas)
 """
 
-SELF_IMPROVER_PROMPT_TEMPLATE = """Current prompt_snapshot:
+SELF_IMPROVER_PROMPT_TEMPLATE = """prompt_snapshot saat ini:
 <<<
 {prompt_snapshot}
 >>>
 
-Predicted sentence from current prompt_snapshot:
+Kalimat prediksi dari prompt_snapshot saat ini:
 {predicted_sentence}
 
-Judge JSON:
+JSON penilaian:
 {judge_json}
 
-Task:
-- Revise ONLY the prompt snapshot used by next-sentence generation.
-- Do NOT rewrite the predicted sentence directly.
-- Keep essay facts unchanged and do not add new factual claims/statistics.
-- Apply targeted edits based on judge issues and prompt_revision_goal.
-- Return strict JSON only with:
-  - revised_prompt_snapshot (string)
-  - diff_summary (list of short strings)
+Tugas:
+- Revisi HANYA prompt snapshot yang dipakai untuk generasi kalimat berikutnya.
+- JANGAN menulis ulang kalimat prediksi secara langsung.
+- Pertahankan fakta esai, jangan tambah klaim/statistik faktual baru.
+- Terapkan edit terarah berdasarkan issues dari penilai dan prompt_revision_goal.
+- Kembalikan JSON ketat saja dengan:
+  - revised_prompt_snapshot (teks)
+  - diff_summary (daftar ringkas perubahan)
 """
 
 
@@ -147,155 +287,80 @@ class SelfImproverOutput(BaseModel):
 
 def reasoning_component(essay_context: str, previous_sentence: str, current_sentence: str) -> dict:
     """
-    Reasoning Component using Step-Back Prompting 
-    with client.beta.chat.completions.parse()
+    Single-request reasoning component (no cache).
     """
-
-    # ==================== Step-Back Abstraction ====================
-    class StepBackOutput(BaseModel):
+    class ReasoningOutput(BaseModel):
         abstract_concept: str
         forward_reasoning: str
-
-    stepback_prompt = f"""
-    You are a Step-Back Reasoning Agent.
-
-    Step back → summarize the abstract idea.
-    Then reason forward → explain logically what should come next.
-
-    Essay Context: {essay_context}
-    Previous Sentence: {previous_sentence}
-    Current Sentence: {current_sentence}
-
-    Respond exactly in this JSON:
-    {{
-      "abstract_concept": "...",
-      "forward_reasoning": "..."
-    }}
-    """
-
-    sb = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        messages=[{"role": "user", "content": stepback_prompt}],
-        response_format=StepBackOutput,
-        reasoning_effort="minimal"
-    )
-    stepback_output = sb.choices[0].message.parsed
-
-
-    # ==================== Semantic Goal ====================
-    class SemanticGoal(BaseModel):
         semantic_goal: str
-
-    semantic_prompt = f"""
-    Based on this abstraction:
-    {stepback_output}
-
-    Determine the semantic goal of the next sentence 
-    (continue description, contrast, example, summary, introduce result).
-
-    Respond in JSON:
-    {{
-      "semantic_goal": "..."
-    }}
-    """
-
-    sem = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        messages=[{"role": "user", "content": semantic_prompt}],
-        response_format=SemanticGoal,
-        reasoning_effort="minimal"
-    )
-    semantic_goal = sem.choices[0].message.parsed.semantic_goal
-
-
-    # ==================== Writing Style ====================
-    class WritingStyle(BaseModel):
         writing_style: str
         tone: str
         structure: str
+        reasoning_summary: str
 
-    style_prompt = f"""
-    The next sentence must achieve the semantic goal: {semantic_goal}
+    reasoning_prompt = f"""
+    Anda adalah agen penalaran Step-Back.
 
-    Describe:
+    Konteks Esai: {essay_context}
+    Kalimat Sebelumnya: {previous_sentence}
+    Kalimat Saat Ini: {current_sentence}
+
+    Tugas (dalam SATU proses penalaran):
+    1. Lakukan step back -> rangkum ide abstraknya.
+    2. Lakukan penalaran maju -> jelaskan logika kelanjutan kalimat.
+    3. Tentukan tujuan semantik kalimat berikutnya.
+    4. Tentukan gaya penulisan: writing_style, tone, structure.
+    5. Ringkas menjadi reasoning_summary singkat.
+
+    Kembalikan JSON valid dengan field persis:
+    - abstract_concept
+    - forward_reasoning
+    - semantic_goal
     - writing_style
     - tone
     - structure
-
-    Respond in JSON:
-    {{
-      "writing_style": "...",
-      "tone": "...",
-      "structure": "..."
-    }}
+    - reasoning_summary
     """
 
-    st = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        messages=[{"role": "user", "content": style_prompt}],
-        response_format=WritingStyle,
-        reasoning_effort="minimal"
+    response = _cached_chat_parse(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": reasoning_prompt}],
+        response_format=ReasoningOutput,
+        reasoning_effort="minimal",
+        use_cache=False,
     )
-    writing_style = st.choices[0].message.parsed
+    parsed = response.choices[0].message.parsed
 
-
-    # ==================== Reasoning Summary ====================
-    class SummaryOutput(BaseModel):
-        reasoning_summary: str
-
-    summary_prompt = f"""
-    Summarize all reasoning into a short paragraph:
-    - Abstract Concept: {stepback_output.abstract_concept}
-    - Forward Reasoning: {stepback_output.forward_reasoning}
-    - Semantic Goal: {semantic_goal}
-    - Writing Style: {writing_style}
-
-    Respond in JSON:
-    {{
-      "reasoning_summary": "..."
-    }}
-    """
-
-    summ = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        messages=[{"role": "user", "content": summary_prompt}],
-        response_format=SummaryOutput,
-        reasoning_effort="minimal"
-    )
-    reasoning_summary = summ.choices[0].message.parsed.reasoning_summary
-
-
-    # ==================== Final Return ====================
     return {
         "stepback_reasoning": {
-            "abstract_concept": stepback_output.abstract_concept,
-            "forward_reasoning": stepback_output.forward_reasoning
+            "abstract_concept": parsed.abstract_concept,
+            "forward_reasoning": parsed.forward_reasoning,
         },
-        "semantic_goal": semantic_goal,
+        "semantic_goal": parsed.semantic_goal,
         "writing_style": {
-            "writing_style": writing_style.writing_style,
-            "tone": writing_style.tone,
-            "structure": writing_style.structure
+            "writing_style": parsed.writing_style,
+            "tone": parsed.tone,
+            "structure": parsed.structure,
         },
-        "reasoning_summary": reasoning_summary
+        "reasoning_summary": parsed.reasoning_summary,
     }
 
 # Identify the writing purpose
 def identify_writing_purpose(current_writing_content):
-    user_prompt = f"""# Instruction:
-You are an advanced AI assistant with expertise in English writing. Your task is to analyze the writing purpose of the predicted sentence in a English essay. Please think step by step.
+    user_prompt = f"""# Instruksi:
+Anda adalah asisten AI tingkat lanjut yang ahli dalam penulisan bahasa Indonesia. Tugas Anda adalah menganalisis tujuan penulisan dari kalimat prediksi dalam esai bahasa Indonesia. Berpikirlah langkah demi langkah.
 
-# Input Structure:
-The user provides the essay's content:
-Essay Content:
+# Struktur Input:
+Pengguna memberikan isi esai:
+Isi Esai:
 {current_writing_content}
 
-Additionally, the user specifies the paragraph containing the predicted sentence and marks its position using [PREDICTED SENTENCE] within the paragraph’s text.
+Selain itu, pengguna menentukan paragraf yang berisi kalimat prediksi dan menandai posisinya menggunakan [PREDICTED SENTENCE] di dalam teks paragraf.
 
-# Your Task:
-1. Understand Context: Analyze the given content and determine the role of the predicted sentence.
-2. Identify Writing Purpose: Consider whether the predicted sentence should introduce an idea, provide evidence, offer a transition, or summarize a point.
-3. Just output the purpose of predicted sentence you analyzed."""
+# Tugas Anda:
+1. Pahami Konteks: Analisis konten yang diberikan dan tentukan peran kalimat prediksi.
+2. Identifikasi Tujuan Penulisan: Pertimbangkan apakah kalimat prediksi harus memperkenalkan ide, memberikan bukti, memberikan transisi, atau merangkum poin.
+3. Keluarkan hanya tujuan kalimat prediksi yang Anda analisis."""
 
     # Output format
     class WritingPurposes(BaseModel):
@@ -307,7 +372,7 @@ Additionally, the user specifies the paragraph containing the predicted sentence
     ]
 
     # Send request
-    response = client.beta.chat.completions.parse(
+    response = _cached_chat_parse(
         model="gpt-5-nano",
         reasoning_effort="minimal",
         messages=messages,
@@ -356,23 +421,23 @@ def vote_writing_purpose(current_writing_content, writing_purposes_list):
     # Format candidate purposes for voting
     writing_purposes_options_list = "\n".join([f"{i+1}. {response}" for i, response in enumerate(writing_purposes_list)])
     # Build voting prompt for the language model
-    user_prompt = f"""# Instruction:
-You are an advanced AI assistant with expertise in English writing. Your task is to analyze a predicted sentence in a English essay and determine which of three given purposes of writing best aligns with its intended function. Additionally, you must consider whether purposes of writing aligns with the English essay cntext. Please think step by step.
+    user_prompt = f"""# Instruksi:
+Anda adalah asisten AI tingkat lanjut yang ahli dalam penulisan bahasa Indonesia. Tugas Anda adalah menganalisis kalimat prediksi dalam esai bahasa Indonesia dan menentukan mana dari tiga tujuan penulisan yang paling sesuai dengan fungsinya. Selain itu, Anda harus mempertimbangkan apakah tujuan penulisan tersebut selaras dengan konteks esai bahasa Indonesia. Berpikirlah langkah demi langkah.
 
-# Input Structure:
-The user provides the essay's content:
-Essay Content:
+# Struktur Input:
+Pengguna memberikan isi esai:
+Isi Esai:
 {current_writing_content}
 
-Additionally, the user specifies the paragraph containing the predicted sentence and marks its position using [PREDICTED SENTENCE] within the paragraph’s text.
+Selain itu, pengguna menentukan paragraf yang berisi kalimat prediksi dan menandai posisinya menggunakan [PREDICTED SENTENCE] di dalam teks paragraf.
 
-Three Purposes of Writing:{writing_purposes_options_list}
+Tiga Tujuan Penulisan:{writing_purposes_options_list}
 
-# Your Task:
-1. Analyze Context: Understand the logical flow of the essay and the role of the predicted sentence.
-2. Evaluate Purposes of Writing: Compare the predicted sentence’s expected function with the Three given purposes of writing and assess whether it aligns with situation description cntext.
-3. Select the Best Fit: Identify and justify which purpose of writing most accurately aligns with the predicted sentence's role and the English essay cntext.(Respond with a number: 1, 2, 3, 4, or 5)
-4. Explain Your Choice: Provide a brief explanation supporting your selection based on the essay’s structure and logical coherence."""
+# Tugas Anda:
+1. Analisis Konteks: Pahami alur logis esai dan peran kalimat prediksi.
+2. Evaluasi Tujuan Penulisan: Bandingkan fungsi yang diharapkan dari kalimat prediksi dengan tiga tujuan penulisan yang diberikan, lalu nilai apakah sesuai dengan konteks deskripsi situasi.
+3. Pilih yang Paling Sesuai: Tentukan dan jelaskan tujuan penulisan yang paling selaras dengan peran kalimat prediksi dan konteks esai bahasa Indonesia. (Jawab dengan angka: 1, 2, 3, 4, atau 5)
+4. Jelaskan Pilihan Anda: Berikan penjelasan singkat yang mendukung pilihan berdasarkan struktur esai dan koherensi logis."""
 
     # Output format
     class BestMatchWritingPurposes(BaseModel):
@@ -385,7 +450,7 @@ Three Purposes of Writing:{writing_purposes_options_list}
     ]
 
     # Ask the model to evaluate each candidate purpose
-    response = client.beta.chat.completions.parse(
+    response = _cached_chat_parse(
         model="gpt-5-nano",
         reasoning_effort="minimal",
         messages=messages,
@@ -419,23 +484,23 @@ Three Purposes of Writing:{writing_purposes_options_list}
             re_writing_purposes_options_list += f"{i}. {writing_purpose}\n"
         
         # Build instruction prompt for the tie-breaking round
-        user_prompt = f"""# Instruction:
-You are an advanced AI assistant with expertise in English writing. Your task is to analyze a predicted sentence in a English essay and determine which of two given purposes of writing best aligns with its intended function. Additionally, you must consider whether purposes of writing aligns with the English essay cntext. Please think step by step.
+        user_prompt = f"""# Instruksi:
+Anda adalah asisten AI tingkat lanjut yang ahli dalam penulisan bahasa Indonesia. Tugas Anda adalah menganalisis kalimat prediksi dalam esai bahasa Indonesia dan menentukan mana dari dua tujuan penulisan yang paling sesuai dengan fungsinya. Selain itu, Anda harus mempertimbangkan apakah tujuan penulisan tersebut selaras dengan konteks esai bahasa Indonesia. Berpikirlah langkah demi langkah.
 
-# Input Structure:
-The user provides the essay's content:
-Essay Content:
+# Struktur Input:
+Pengguna memberikan isi esai:
+Isi Esai:
 {current_writing_content}
 
-Additionally, the user specifies the paragraph containing the predicted sentence and marks its position using [PREDICTED SENTENCE] within the paragraph’s text.
+Selain itu, pengguna menentukan paragraf yang berisi kalimat prediksi dan menandai posisinya menggunakan [PREDICTED SENTENCE] di dalam teks paragraf.
 
-Two Purposes of Writing:{re_writing_purposes_options_list}
+Dua Tujuan Penulisan:{re_writing_purposes_options_list}
 
-# Your Task:
-1. Analyze Context: Understand the logical flow of the essay and the role of the predicted sentence.
-2. Evaluate Purposes of Writing: Compare the predicted sentence’s expected function with the two given purposes of writing and assess whether it aligns with situation description cntext.
-3. Select the Best Fit: Identify and justify which purpose of writing most accurately aligns with the predicted sentence's role and the English essay cntext.(Respond with a number: 1, 2, 3, 4, or 5)
-4. Explain Your Choice: Provide a brief explanation supporting your selection based on the essay’s structure and logical coherence."""
+# Tugas Anda:
+1. Analisis Konteks: Pahami alur logis esai dan peran kalimat prediksi.
+2. Evaluasi Tujuan Penulisan: Bandingkan fungsi yang diharapkan dari kalimat prediksi dengan dua tujuan penulisan yang diberikan, lalu nilai apakah sesuai dengan konteks deskripsi situasi.
+3. Pilih yang Paling Sesuai: Tentukan dan jelaskan tujuan penulisan yang paling selaras dengan peran kalimat prediksi dan konteks esai bahasa Indonesia. (Jawab dengan angka: 1, 2, 3, 4, atau 5)
+4. Jelaskan Pilihan Anda: Berikan penjelasan singkat yang mendukung pilihan berdasarkan struktur esai dan koherensi logis."""
         # Output format
         class BestMatchWritingPurposes(BaseModel):
             best_match_writing_purpose: str
@@ -445,7 +510,7 @@ Two Purposes of Writing:{re_writing_purposes_options_list}
             {"role": "user", "content": user_prompt}
         ]
         # Ask the model to resolve the tie between purposes
-        response = client.beta.chat.completions.parse(
+        response = _cached_chat_parse(
             model="gpt-5-nano",
             reasoning_effort="minimal",
             messages=messages,
@@ -480,22 +545,22 @@ Two Purposes of Writing:{re_writing_purposes_options_list}
 
 # Generate queries (max 3)
 def generate_question(current_writing_content, best_match_writing_purpose):
-    user_prompt = f"""# Instruction:
-You are an advanced AI assistant with expertise in analyzing English writing. Your task is to improve the predicted sentence in an English essay by formulating effective database queries. The predicted sentence has a specific purpose of writing, which will be provided as input.  Your ultimate goal is to generate EXACTLY THREE targeted, insightful questions that can retrieve relevant and useful information from the database to refine the predicted sentence.
+    user_prompt = f"""# Instruksi:
+Anda adalah asisten AI tingkat lanjut yang ahli dalam analisis penulisan bahasa Indonesia. Tugas Anda adalah meningkatkan kalimat prediksi dalam esai bahasa Indonesia dengan merumuskan query database yang efektif. Kalimat prediksi memiliki tujuan penulisan tertentu yang akan diberikan sebagai input. Tujuan akhir Anda adalah menghasilkan TEPAT TIGA pertanyaan yang terarah, tajam, dan dapat mengambil informasi relevan dari database untuk menyempurnakan kalimat prediksi.
 
-# Input Structure:
-The user provides the essay's content:
-Essay Content:
+# Struktur Input:
+Pengguna memberikan isi esai:
+Isi Esai:
 {current_writing_content}
 
-Additionally, the user specifies the paragraph containing the predicted sentence and marks its position using [PREDICTED SENTENCE] within the paragraph’s text.
+Selain itu, pengguna menentukan paragraf yang berisi kalimat prediksi dan menandai posisinya menggunakan [PREDICTED SENTENCE] di dalam teks paragraf.
 
-The purpose of writing predicted sentence: {best_match_writing_purpose}
+Tujuan penulisan kalimat prediksi: {best_match_writing_purpose}
 
-# Your Task:
-1. Understand the logical flow of the essay and the role of the predicted sentence.
-2. Based on the purpose of writing predicted sentence, produce EXACTLY THREE short, concrete, and database-friendly questions.
-3. The questions should focus on retrieving factual or descriptive information, not literary analysis."""
+# Tugas Anda:
+1. Pahami alur logis esai dan peran kalimat prediksi.
+2. Berdasarkan tujuan penulisan kalimat prediksi, hasilkan TEPAT TIGA pertanyaan yang singkat, konkret, dan ramah untuk pencarian database.
+3. Pertanyaan harus berfokus pada pengambilan informasi faktual atau deskriptif, bukan analisis sastra."""
 
     # Response schema for generated questions
     class WritingQuerys(BaseModel):
@@ -507,7 +572,7 @@ The purpose of writing predicted sentence: {best_match_writing_purpose}
     ]
 
     # Request the model to generate research questions
-    query = client.beta.chat.completions.parse(
+    query = _cached_chat_parse(
         model="gpt-5-nano",
         reasoning_effort="minimal",
         messages=messages,
@@ -522,27 +587,36 @@ The purpose of writing predicted sentence: {best_match_writing_purpose}
 # Result: generated questions
 async def answer_from_history(query):
     # Build prompt for retrieving factual answers from historical data
-    user_prompt = f"""# Instruction:
-You are an AI assistant tasked with extracting accurate information from a provided Knowledge Graph subgraph. Your primary goal is to answer the user's question strictly based on the facts present in the Knowledge Graph supplied below. If the answer is not explicitly represented or cannot be directly inferred from the graph relations, respond with "No related information." Avoid making assumptions, adding external knowledge, or generating speculative answers. Please think step by step.
+    user_prompt = f"""# Instruksi:
+Anda adalah asisten AI yang bertugas mengekstrak informasi akurat dari subgraf Knowledge Graph yang diberikan. Tujuan utama Anda adalah menjawab pertanyaan pengguna secara ketat hanya berdasarkan fakta yang ada pada Knowledge Graph di bawah. Jika jawaban tidak direpresentasikan secara eksplisit atau tidak dapat disimpulkan langsung dari relasi graf, balas dengan "No related information." Hindari asumsi, penambahan pengetahuan eksternal, atau jawaban spekulatif. Berpikirlah langkah demi langkah.
 
-# Input Structure:
-Question: {query}
+# Struktur Input:
+Pertanyaan: {query}
 
-# Your Task:
-1. Carefully examine the Knowledge Graph subgraph to determine whether it contains a direct answer to the question.
-2. If the answer is explicitly represented or can be directly inferred via one or more graph relations, provide a concise and accurate response.
-3. If the Knowledge Graph subgraph does not contain the requested information, respond strictly with: "No related information."
-4. Do not include external knowledge or assumptions beyond what is present in the provided Knowledge Graph subgraph.
+# Tugas Anda:
+1. Tinjau subgraf Knowledge Graph dengan cermat untuk menentukan apakah ada jawaban langsung atas pertanyaan.
+2. Jika jawaban direpresentasikan secara eksplisit atau dapat disimpulkan langsung melalui satu atau lebih relasi graf, berikan jawaban yang ringkas dan akurat.
+3. Jika subgraf Knowledge Graph tidak memuat informasi yang diminta, balas secara ketat dengan: "No related information."
+4. Jangan sertakan pengetahuan eksternal atau asumsi di luar yang ada pada subgraf Knowledge Graph yang diberikan.
 """
+    cache_key = _build_prompt_cache_key("graph_search", {"prompt": user_prompt})
+    cached = _prompt_cache_get(cache_key)
+    if cached is not None and "answer" in cached:
+        return str(cached["answer"])
+
     # GraphRAG retrieval search
     try:
         # Kirim user_prompt ke NodeRAG search engine
         result = await search_graph(user_prompt)
         if result and hasattr(result, "answer"):
             print(result.answer)
-            return result.answer
+            answer_text = str(result.answer)
+            _prompt_cache_set(cache_key, {"answer": answer_text})
+            return answer_text
         print("no related info")
-        return "No related information."
+        answer_text = "No related information."
+        _prompt_cache_set(cache_key, {"answer": answer_text})
+        return answer_text
     except Exception as e:
         return f"Error during RAG search: {str(e)}"
 
@@ -566,21 +640,21 @@ async def answer_from_history_batch(queries: List[str]) -> Dict[str, str]:
 # Answer questions using the current essay content
 def answer_from_current(current_writing_content, query):
     user_prompt = f"""
-# Instruction:
-You are an AI assistant tasked with extracting accurate information from a given essay. Your primary goal is to answer the user's question strictly based on the provided text. If the answer is not explicitly stated or cannot be inferred directly from the essay, respond with "No related information." Avoid making assumptions, adding external knowledge, or generating speculative answers. Please think step by step.
+# Instruksi:
+Anda adalah asisten AI yang bertugas mengekstrak informasi akurat dari esai yang diberikan. Tujuan utama Anda adalah menjawab pertanyaan pengguna secara ketat berdasarkan teks yang tersedia. Jika jawaban tidak dinyatakan secara eksplisit atau tidak dapat disimpulkan langsung dari esai, balas dengan "No related information." Hindari asumsi, penambahan pengetahuan eksternal, atau jawaban spekulatif. Berpikirlah langkah demi langkah.
 
-# Input Structure:
-The user provides the essay's content:
-Essay Content:
+# Struktur Input:
+Pengguna memberikan isi esai:
+Isi Esai:
 {current_writing_content}
 
-Question: {query}
+Pertanyaan: {query}
 
-# Your Task:
-1. Carefully analyze the essay to determine if it contains a direct answer to the question.
-2. If the answer is explicitly stated or can be directly inferred from the essay, provide a concise and accurate response.
-3. If the essay does not contain the requested information, respond strictly with: "No related information."
-4. Do not include external knowledge or assumptions beyond what is given in the essay.
+# Tugas Anda:
+1. Analisis esai dengan cermat untuk menentukan apakah esai memuat jawaban langsung atas pertanyaan.
+2. Jika jawaban dinyatakan secara eksplisit atau dapat disimpulkan langsung dari esai, berikan jawaban yang ringkas dan akurat.
+3. Jika esai tidak memuat informasi yang diminta, balas secara ketat dengan: "No related information."
+4. Jangan sertakan pengetahuan eksternal atau asumsi di luar yang diberikan dalam esai.
 """
     user_prompt = user_prompt.replace("[PREDICTED SENTENCE]", "")
 
@@ -594,7 +668,7 @@ Question: {query}
     ]
 
     # Query the model for answers based on the current essay
-    answer = client.beta.chat.completions.parse(
+    answer = _cached_chat_parse(
         model="gpt-5-nano",
         reasoning_effort="minimal",
         messages=messages,
@@ -627,343 +701,122 @@ async def answer_from_current_batch(current_writing_content: str, queries: List[
 
 # Identify sentence patterns using current and historical essays
 def identify_sentence_pattern(current_writing_content, history_content, best_match_writing_purpose):
-    # Build prompt for detailed sentence-pattern analysis
-    user_prompt = f"""#Instruction:
-You are a writing analysis AI designed to help users understand their writing style. Your task is to analyze the provided English essays and identify sentence patterns. You should provide detailed explanations for each identified category and include examples from the text.
-# Task Details:
-- Focus on the deeper underlying patterns and characteristics of the writing, including personal tendencies in vocabulary, sentence structures, and rhetorical devices.
-- Do not worry too much about grammar or spelling mistakes; your primary goal is to focus on the stylistic tendencies present in the text.
-- Provide clear definitions for each category, with specific examples from the text.
-# Output Structure:
-Sentence Pattern
-- Sentence Pattern Type: Describes the common sentence structure used by the writer.
-- Explanation: Explain the structure of the sentences that the user typically employs in their writing.
-- Example: Provide a representative example from the text to demonstrate the sentence structure.
-- Pattern: Describe the pattern of how sentences are generally formed.
-- Function: Explain the purpose or effect this sentence pattern serves in the text.
+    current_text = str(current_writing_content or "").strip()
+    history_text = str(history_content or "").strip()
+    purpose_text = str(best_match_writing_purpose or "").strip()
 
-#Input
-English essays: {history_content}
-
-#Your Task:
-1. Analyze the provided essays to identify writing patterns and features.
-2. Returning your analysis results in the output structure, ensuring each section is thorough and well-explained."""
-
-    # Response schema for sentence-pattern analysis
-    class HistorySentencePattern(BaseModel):
-        sentent_pattern_type: str
-        explanation: str
-        example: str
-        pattern: str
-        function: str
-
-
-    class HistoryWritingPatternAnalysis(BaseModel):
-        history_sentence_patterns: list[HistorySentencePattern]
-
-    # Prepare payload for sentence-pattern analysis
-    messages=[
-        {"role": "user", "content": user_prompt},
-    ]
-
-    # Request the model to analyze sentence patterns
-    history_writing_pattern_analysis = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        reasoning_effort="minimal",
-        messages=messages,
-        response_format=HistoryWritingPatternAnalysis
-    )
-
-    # Extract sentence-pattern data from the response
-    history_sentence_patterns = history_writing_pattern_analysis.choices[0].message.parsed.history_sentence_patterns
-
-
-    # Build prompt to extract grammar features for each pattern
-    user_prompt = f"""#Instruction:
-You are a writing analysis AI designed to help users understand their writing style. Your task is to analyze the provided English essays and identify sentence patterns. You should provide detailed explanations for each identified category and include examples from the text.
-# Task Details:
-- Focus on the deeper underlying patterns and characteristics of the writing, including personal tendencies in vocabulary, sentence structures, and rhetorical devices.
-- Do not worry too much about grammar or spelling mistakes; your primary goal is to focus on the stylistic tendencies present in the text.
-- Provide clear definitions for each category, with specific examples from the text.
-# Output Structure:
-Sentence Pattern
-- Sentence Pattern Type: Describes the common sentence structure used by the writer.
-- Explanation: Explain the structure of the sentences that the user typically employs in their writing.
-- Example: Provide a representative example from the text to demonstrate the sentence structure.
-- Pattern: Describe the pattern of how sentences are generally formed.
-- Function: Explain the purpose or effect this sentence pattern serves in the text.
-
-#Input
-English essays: {current_writing_content}
-
-#Your Task:
-1. Analyze the provided essays to identify writing patterns and features.
-2. Returning your analysis results in the output structure, ensuring each section is thorough and well-explained.
-"""
-
-    # Response schema for sentence patterns in the current essay
-    class CurrentSentencePattern(BaseModel):
-        sentent_pattern_type: str
-        explanation: str
-        example: str
-        pattern: str
-        function: str
-
-    class CurrentWritingPatternAnalysis(BaseModel):
-        current_sentence_patterns: list[CurrentSentencePattern]
-
-    # Prepare payload for current-essay sentence-pattern analysis
-    messages=[
-        {"role": "user", "content": user_prompt},
-    ]
-
-    # Request sentence-pattern analysis for the current essay
-    current_writing_pattern_analysis = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        reasoning_effort="minimal",
-        messages=messages,
-        response_format=CurrentWritingPatternAnalysis
-    )
-
-    # Extract current sentence-pattern data
-    current_sentence_patterns = current_writing_pattern_analysis.choices[0].message.parsed.current_sentence_patterns
-
-    # Helper to format sentence-pattern output
-    def format_common_sentence_patterns(patterns: List) -> str:
-        class SentencePattern(BaseModel):
-            sentent_pattern_type: str
-            explanation: str
-            example: str
-            pattern: str
-            function: str
-
-        validated_patterns = [SentencePattern(**pattern) if isinstance(pattern, dict) else pattern for pattern in patterns]
-
-        output = []
-        for idx, pattern in enumerate(validated_patterns, start=1):
-            output.append(
-                f"Type: {pattern.sentent_pattern_type}\n"
-                f"Explanation: {pattern.explanation}\n"
-                f"Example: {pattern.example}\n"
-                f"Pattern: {pattern.pattern}\n"
-                f"Function: {pattern.function}\n"
-            )
-        return "\n".join(output)
-    
-    # Format pattern summaries for history and current essays
-    formatted_history_patterns = format_common_sentence_patterns(history_sentence_patterns)
-    formatted_current_patterns = format_common_sentence_patterns(current_sentence_patterns)
-
-    # Build prompt to select the most suitable sentence pattern
-    user_prompt = f"""# Instruction:
-Instruction: You are an advanced AI assistant with expertise in English writing. Your task is to select the appropriate sentence pattern for the predicted sentence from both the history and current sentence pattern lists based on the essay content and the purpose of writing the predicted sentence. Please think step by step!
-
-# Input Structure: 
-The user provides the essay's content:
-Essay Content:
-{current_writing_content}
-
-The purpose of writing the predicted sentence: {best_match_writing_purpose}
-
-Current Sentence Pattern List:
-{formatted_current_patterns}
-
-History Sentence Pattern List:
-{formatted_history_patterns}
-
-# You Task:
-- Please compare the sentence patterns used in the current essay and the past essays, and based on the purpose of the predicted sentence, determine which sentence pattern should be used for crafting the predicted sentence."""
-
-    # Response schema for the selected sentence pattern
-    class PredictSentencePattern(BaseModel):
-        sentent_pattern_type: str
-        explanation: str
-        example: str
-        pattern: str
-        function: str
-
-    # Prepare payload for sentence-pattern selection
-    messages=[
-        {"role": "user", "content": user_prompt}
-    ]
-
-    # Ask the model to choose the most suitable sentence pattern
-    predict_sntence_pattern = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        reasoning_effort="minimal",
-        messages=messages,
-        response_format=PredictSentencePattern,
-        n=5  # Request five alternative sentence-pattern suggestions
-    )
-
-    # Format the sentence-pattern options returned by the model
-    predict_sntence_pattern_list = []
-    for i, choice in enumerate(predict_sntence_pattern.choices):
-        parsed = choice.message.parsed        
-        # Extract individual fields for clarity
-        type_info = f"Type: {parsed.sentent_pattern_type}"
-        explanation = f"Explanation: {parsed.explanation}"
-        example = f"Example: {parsed.example}"
-        pattern = f"Pattern: {parsed.pattern}"
-        function = f"Function: {parsed.function}"
-        # Combine the details into a readable block
-        formatted_string = f"{type_info}\n{explanation}\n{example}\n{pattern}\n{function}"
-        # Store formatted option for later voting
-        predict_sntence_pattern_list.append(formatted_string)
-
-
-    # Build voting prompt for sentence-pattern selection
-    # Prepare payload for writing-pattern analysis
-    predict_sntence_pattern_options_list = "\n".join([f"{i+1}. {response}" for i, response in enumerate(predict_sntence_pattern_list)])
-
-    # Request writing-pattern analysis from the model
-    user_prompt = f"""# Instruction: 
-You are an advanced AI assistant with expertise in English writing. Your task is to choose the sentence pattern that the predicted sentence should use from the Three sentence pattern options according to the English essay and the purpose of writing the predicted sentence.
-
-# Input Structure: 
-The user provides the essay's content:
-Essay Content:
-{current_writing_content}
-
-The purpose of writing the predicted sentence : {best_match_writing_purpose}
-
-Three Sentence Pattern Options: {predict_sntence_pattern_options_list}
-
-# Your Task:
-- Review the content of the essay and the stated purpose of the predicted sentence.
-- Carefully analyze the Three provided sentence pattern options.
-- Select the sentence pattern that aligns best with the essay’s context and the goal of the predicted sentence.(Respond with a number: 1, 2, 3, 4, or 5)
-- Ensure that the chosen sentence pattern enhances the overall clarity, flow, and coherence of the essay.
-- Provide a brief explanation of why you chose the selected sentence pattern."""
-    user_prompt = user_prompt.replace("[PREDICTED SENTENCE]", "")
-
-    # Response schema for the selected sentence pattern
-    class BestMatchSentencePattern(BaseModel):
-        best_match_sentence_pattern: str
-        best_match_sentence_pattern_reason: str
-
-    # Prepare payload for sentence-pattern voting
-    messages=[
-        {"role": "user", "content": user_prompt}
-    ]
-
-    # Ask the model to vote on the best sentence pattern
-    response = client.beta.chat.completions.parse(
-        model="gpt-5-nano",
-        reasoning_effort="minimal",
-        messages=messages,
-        response_format=BestMatchSentencePattern,
-        n=5  # Request five votes for diversity
-    )
-
-    # Collect vote results for later analysis
-    best_match_sentence_pattern_vote_results = []
-    best_match_sentence_pattern_vote_results_reason = []
-    for choice in response.choices:
-        best_match_sentence_pattern_vote_results.append(choice.message.parsed.best_match_sentence_pattern)
-        best_match_sentence_pattern_vote_results_reason.append(choice.message.parsed.best_match_sentence_pattern_reason)
-        # Debug prints removed to avoid non-English output
-        # Debug prints removed to avoid non-English output
-
-    # Determine the winning sentence-pattern option
-    best_match_sentence_pattern_vote_counts = Counter(best_match_sentence_pattern_vote_results)
-    best_match_sentence_pattern_highest_vote_result = max(best_match_sentence_pattern_vote_counts.values())
-    best_match_sentence_pattern_winning_options = [option for option, count in best_match_sentence_pattern_vote_counts.items() if count == best_match_sentence_pattern_highest_vote_result]
-
-    # Handle ties by triggering a tie-break vote
-    if len(best_match_sentence_pattern_winning_options) > 1:
-        # Prepare tie-breaking options for the sentence-pattern vote
-        tie_options = [predict_sntence_pattern_list[int(option) - 1] for option in best_match_sentence_pattern_winning_options]
-        tie_options_list = "\n".join([f"{i+1}. {response}" for i, response in enumerate(tie_options)])
-
-        # Build tie-breaking prompt for sentence-pattern selection
-        tie_prompt = f"""# Instruction: 
-    You are an advanced AI assistant with expertise in English writing. Your task is to choose the sentence pattern that the predicted sentence should use from the two sentence pattern options according to the English essay and the purpose of writing the predicted sentence.
-
-    # Input Structure: 
-    The user provides the essay's content:
-    Essay Content:
-    {current_writing_content}
-
-    The purpose of writing the predicted sentence : {best_match_writing_purpose}
-
-    Two Sentence Pattern Options: {tie_options_list}
-
-    # Your Task:
-    - Review the content of the essay and the stated purpose of the predicted sentence.
-    - Carefully analyze the two provided sentence pattern options.
-    - Select the sentence pattern that aligns best with the essay’s context and the goal of the predicted sentence.(Respond with a number: 1, 2, 3, 4, or 5)
-    - Ensure that the chosen sentence pattern enhances the overall clarity, flow, and coherence of the essay.
-    - Provide a brief explanation of why you chose the selected sentence pattern."""
-        user_prompt = user_prompt.replace("[PREDICTED SENTENCE]", "")
-
-        # Prepare payload for tie-break voting
-        tie_messages = [
-            {"role": "user", "content": tie_prompt}
-        ]
-
-        # Request tie-break voting from the model
-        tie_response = client.beta.chat.completions.parse(
-            model="gpt-5-nano",
-            reasoning_effort="minimal",
-            messages=tie_messages,
-            response_format=BestMatchSentencePattern,
-            n=3
+    if not current_text and not history_text:
+        return (
+            "Type: Deklaratif informatif\n"
+            "Explanation: Kalimat langsung untuk menyampaikan informasi inti secara jelas.\n"
+            "Example: Kalimat menyatakan poin utama tanpa struktur kompleks.\n"
+            "Pattern: [Subjek] + [Predikat] + [Objek/Keterangan]\n"
+            "Function: Menjaga kejelasan ide utama dan kesinambungan paragraf."
         )
 
-        # Collect tie-break vote results
-        tie_vote_results = []
-        tie_vote_reason = []
-        for choice in tie_response.choices:
-            tie_vote_results.append(choice.message.parsed.best_match_sentence_pattern)
-            tie_vote_reason.append(choice.message.parsed.best_match_sentence_pattern_reason)
+    user_prompt = f"""Anda adalah analis gaya kalimat bahasa Indonesia.
+Pilih SATU pola kalimat terbaik untuk kalimat prediksi berdasarkan 3 input:
+1) Isi esai saat ini
+2) Isi esai riwayat
+3) Tujuan penulisan kalimat prediksi
+
+Gunakan ringkasan gaya dari esai saat ini sebagai prioritas utama, lalu sesuaikan dengan riwayat jika relevan.
+Jangan membuat banyak opsi. Kembalikan satu jawaban final saja.
+
+Input:
+[CURRENT ESSAY]
+{current_text}
+
+[HISTORY ESSAY]
+{history_text}
+
+[PREDICTION PURPOSE]
+{purpose_text}
+
+Output HARUS tepat 5 baris berikut:
+Type: ...
+Explanation: ...
+Example: ...
+Pattern: ...
+Function: ...
+"""
+
+    try:
+        response = client.chat.completions.create(
+           model="gpt-5-nano",
+            reasoning_effort="minimal",
+            messages=[
+                {"role": "system", "content": "Kamu menjawab ringkas, konsisten, dan mengikuti format output."},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        content = (response.choices[0].message.content or "").strip()
+        if not content:
+            raise ValueError("Empty response from model.")
+        return content
+    except Exception as exc:
+        raise RuntimeError(f"Sentence pattern generation failed: {str(exc)}")
+
+def _split_history_content_batches(history_content: str, max_chars: int) -> List[str]:
+    text = str(history_content or "").strip()
+    if not text:
+        return []
+
+    sections = [chunk.strip() for chunk in re.split(r"\n\s*\n+", text) if chunk and chunk.strip()]
+    if not sections:
+        return [text]
+
+    batches: List[str] = []
+    current_batch: List[str] = []
+    current_len = 0
+
+    for section in sections:
+        section_len = len(section)
+        extra_len = 2 if current_batch else 0
+        if current_batch and current_len + extra_len + section_len > max_chars:
+            batches.append("\n\n".join(current_batch))
+            current_batch = [section]
+            current_len = section_len
+        else:
+            current_batch.append(section)
+            current_len += extra_len + section_len
+
+    if current_batch:
+        batches.append("\n\n".join(current_batch))
+
+    return batches
 
 
-        # Determine the winning option from the tie-break vote
-        tie_vote_counts = Counter(tie_vote_results)
-        tie_highest_vote_result = max(tie_vote_counts.values())
-        tie_winning_options = [option for option, count in tie_vote_counts.items() if count == tie_highest_vote_result][0]
-        best_match_sentence_pattern = tie_options[int(tie_winning_options) - 1]
-
-    else:
-        best_match_sentence_pattern_winning_option = best_match_sentence_pattern_winning_options[0]
-        best_match_sentence_pattern = predict_sntence_pattern_list[int(best_match_sentence_pattern_winning_option) - 1]
-        # Debug prints removed to avoid non-English output
-        # Debug prints removed to avoid non-English output
-    
-    return best_match_sentence_pattern
-
-# Identify overall writing patterns from historical essays
-def identify_writing_pattern(history_content):
+def _identify_writing_pattern_single(history_content: str) -> tuple[str, str]:
     # Build prompt for writing pattern analysis
-    user_prompt = f"""# Instruction:
-You are a writing analysis AI designed to help users understand their writing style. Your task is to generate user's writing style based on the user's provided English essays.
+    user_prompt = f"""# Instruksi:
+Anda adalah AI analisis tulisan yang dirancang untuk membantu pengguna memahami gaya menulis mereka. Tugas Anda adalah menghasilkan gaya menulis pengguna berdasarkan esai bahasa Indonesia yang diberikan pengguna.
 
-# Task Details:
-- Analyze and discover the underlying writing patterns and features that reflect the user's personal writing habits, such as preferred vocabulary, sentence structures, and rhetorical devices.
-Don't worry too much about grammar or spelling mistakes. Should focus on identifying and characterizing the user's stylistic tendencies.
+# Detail Tugas:
+- Analisis dan temukan pola serta fitur penulisan mendasar yang mencerminkan kebiasaan menulis personal pengguna, seperti kosakata yang disukai, struktur kalimat, dan perangkat retorika.
+Jangan terlalu khawatir tentang kesalahan tata bahasa atau ejaan. Fokuslah pada identifikasi dan karakterisasi kecenderungan gaya pengguna.
 
-# Output Structure:
+# Struktur Output:
 Writing Pattern
-- writing pattern type: defines the category of the pattern (e.g. narrative, expository, argumentative, etc.)
-- explanation: the main features of the pattern, such as how information is organized, common expression habits, tone, etc.
-- pattern: common ways of organizing paragraphs or content
-example: provide a representative example of the pattern
+- writing pattern type: mendefinisikan kategori pola (mis. naratif, ekspositori, argumentatif, dll.)
+- explanation: fitur utama pola, seperti cara informasi diorganisasi, kebiasaan ekspresi umum, nada, dll.
+- pattern: cara umum dalam menyusun paragraf atau konten
+example: berikan contoh representatif dari pola tersebut
 
 Writing Feature
-- writing feature type: defines the writing features (e.g. vocabulary, sentence structure, word order, rhetoric, etc.)
-- explanation: describes the user's common expression style, including preferred syntax, vocabulary, conjunctions, etc.
-- example: give an example illustrating how the feature manifests in the text
-- preferred words: the words and phrases favored by the user
-- preferred syntax: the sentence structures favored by the user, such as simple sentences, long sentences, repetitive sentence patterns, etc.
+- writing feature type: mendefinisikan fitur penulisan (mis. kosakata, struktur kalimat, urutan kata, retorika, dll.)
+- explanation: menjelaskan gaya ekspresi umum pengguna, termasuk sintaks yang disukai, kosakata, konjungsi, dll.
+- example: berikan contoh bagaimana fitur tersebut muncul dalam teks
+- preferred words: kata dan frasa yang disukai pengguna
+- preferred syntax: struktur kalimat yang disukai pengguna, seperti kalimat sederhana, kalimat panjang, pola kalimat repetitif, dll.
 
 # Input
-Several English essays:
+Beberapa esai bahasa Indonesia:
 {history_content}
 
-# Your Task:
-1. Analyze the provided essays to identify writing patterns and features.
-2. Return your analysis results in the output structure, ensuring each section is thorough and well-explained."""
+# Tugas Anda:
+1. Analisis esai yang diberikan untuk mengidentifikasi pola dan fitur penulisan.
+2. Kembalikan hasil analisis dalam struktur output, pastikan setiap bagian lengkap dan dijelaskan dengan baik."""
     
     # Format writing pattern descriptions
     class WritingPattern(BaseModel):
@@ -985,11 +838,12 @@ Several English essays:
         {"role": "user", "content": user_prompt},
     ]
     # Build prompt for generating the predicted sentence
-    writing_pattern_analysis = client.beta.chat.completions.parse(
-            model="gpt-5-nano",
+    writing_pattern_analysis = _cached_chat_parse(
+            model="gpt-4o-mini",
             reasoning_effort="minimal",
             messages=messages,
             response_format=WritingPatternAnalysis,
+            use_cache=False,
         )
     writing_patterns = writing_pattern_analysis.choices[0].message.parsed.writing_patterns
     writing_features = writing_pattern_analysis.choices[0].message.parsed.writing_features
@@ -1023,6 +877,15 @@ Several English essays:
     return writing_patterns_formatted_output, writing_features_formatted_output
 
 
+# Identify overall writing patterns from historical essays
+async def identify_writing_pattern(history_content: str) -> tuple[str, str]:
+    text = str(history_content or "").strip()
+    if not text:
+        return "", ""
+    # Single request only (no batching).
+    return await asyncio.to_thread(_identify_writing_pattern_single, text)
+
+
 # Predict the final sentence using collected context
 def predict_sentence(
     title,
@@ -1037,102 +900,98 @@ def predict_sentence(
     #vocabulary_info  # new
 ):
     # Run Step-Back Reasoning Component
-    reasoning_output = reasoning_component(
-    essay_context=context_info,
-    previous_sentence=answer_from_history,
-    current_sentence=current_writing_content)
+    # reasoning_output = reasoning_component(
+    # essay_context=context_info,
+    # previous_sentence=answer_from_history,
+    # current_sentence=current_writing_content)
     
     # Extracted Vocabulary Context:
 # Vocabulary Words: {', '.join(vocabulary_info.get('vocabulary', []))}
 # Common Words: {', '.join(vocabulary_info.get('common_words', []))}
     # Build prompt for generating the predicted sentence
-    user_prompt = f"""# Instruction:
-You are an AI writing assistant specialized in predicting a sentence within a user’s English essay. 
-Your task is to generate ONE predicted sentence based on the provided full context. 
-The sentence must align with the essay's **core topic**, as defined by the Title and Context, and must not deviate from the main subject. 
-Please think step by step!
+    user_prompt = f"""# Instruksi:
+Anda adalah asisten penulisan AI yang khusus memprediksi sebuah kalimat di dalam esai bahasa Indonesia pengguna.
+Tugas Anda adalah menghasilkan SATU kalimat prediksi berdasarkan konteks lengkap yang diberikan.
+Kalimat tersebut harus selaras dengan **topik inti** esai, sebagaimana didefinisikan oleh Judul dan Konteks, dan tidak boleh menyimpang dari subjek utama.
+Berpikirlah langkah demi langkah!
 
-# Input Detail:
-- Essay Title: The title defines the essay's core topic and sets the overall direction.
-- Contextual Information: Background descriptions and keywords that represent the essay's intent and audience perspective.
-- Essay Content: The entire essay text, with one paragraph containing the marker [PREDICTED SENTENCE], which is where the sentence will be inserted.
-- Writing Purpose: The intent or goal for adding the predicted sentence.
-- Writing Pattern: The organizational structure of the essay.
-- Writing Features: The stylistic and linguistic tone.
-- Sentence Pattern: The designated grammatical structure of the sentence.
-- Enhancement Details: Supplementary writing details, drawn from current and past writing drafts.
-- Extracted Vocabulary Context: Words and expressions frequently appearing in the essay, reflecting tone and lexical consistency.
+# Detail Input:
+- Judul Esai: Judul mendefinisikan topik inti esai dan menetapkan arah keseluruhan.
+- Informasi Kontekstual: Deskripsi latar dan kata kunci yang mewakili maksud esai serta perspektif audiens.
+- Isi Esai: Teks esai lengkap, dengan satu paragraf yang berisi penanda [PREDICTED SENTENCE], yaitu lokasi penyisipan kalimat.
+- Tujuan Penulisan: Niat atau tujuan penambahan kalimat prediksi.
+- Pola Penulisan: Struktur pengorganisasian esai.
+- Fitur Penulisan: Nada stilistika dan linguistik.
+- Pola Kalimat: Struktur gramatikal kalimat yang ditetapkan.
+- Detail Peningkatan: Detail tambahan penulisan yang diambil dari draf saat ini dan draf sebelumnya.
+- Konteks Kosakata Terekstrak: Kata dan ungkapan yang sering muncul dalam esai, mencerminkan nada dan konsistensi leksikal.
 
-# Input Structure:
-Essay Title:
+# Struktur Input:
+Judul Esai:
 {title}
 
-Contextual Information:
+Informasi Kontekstual:
 {context_info}
 
-Essay Content:
+Informasi Kontekstual:
+{context_info}
+
+Informasi Kontekstual:
+{context_info}
+
+Isi Esai:
 {current_writing_content}
 
-Writing Purpose:
+Tujuan Penulisan:
 {best_match_writing_purpose}
 
-Writing Pattern:
+Pola Penulisan:
 {writing_patterns_formatted_output}
 
-Writing Features:
+Fitur Penulisan:
 {writing_features_formatted_output}
 
-Sentence Pattern:
+Pola Kalimat:
 {best_match_sentence_pattern}
 
-Enhancement Details:
+Detail Peningkatan:
 {answer_from_current}
 
 {answer_from_history}
 
-# Step-Back Reasoning Output:
-Abstract Concept:
-{reasoning_output["stepback_reasoning"]}
-
-Semantic Goal:
-{reasoning_output["semantic_goal"]}
-
-Writing Style:
-{reasoning_output["writing_style"]}
-
-Reasoning Summary:
-{reasoning_output["reasoning_summary"]}
 
 
-# Your Task:
-1. **Focus on the Core Topic:**
-   - Ensure the predicted sentence directly supports the essay's core topic as defined by the Title and Contextual Information.
-   - Identify the role of the predicted sentence (introducing an idea, providing evidence, offering a transition, or summarizing a point).
-   - Avoid introducing unrelated or tangential ideas.
+# Tugas Anda:
+1. **Fokus pada Topik Inti:**
+   - Pastikan kalimat prediksi secara langsung mendukung topik inti esai sesuai Judul dan Informasi Kontekstual.
+   - Identifikasi peran kalimat prediksi (memperkenalkan ide, memberikan bukti, memberi transisi, atau merangkum poin).
+   - Hindari memasukkan ide yang tidak terkait atau menyimpang.
 
-2. **Enhance Logical Flow:**
-   - The predicted sentence must connect seamlessly with the preceding and following sentences.
-   - Use transition words or phrases if necessary to enhance the flow.
+2. **Perkuat Alur Logis:**
+   - Kalimat prediksi harus terhubung mulus dengan kalimat sebelum dan sesudahnya.
+   - Gunakan kata atau frasa transisi jika diperlukan untuk memperbaiki alur.
 
-3. **Avoid Redundancy:**
-   - Do NOT repeat or paraphrase ideas already present in the essay.
-   - Check for semantic similarity (not just surface text).
+3. **Hindari Redundansi:**
+   - JANGAN mengulang atau memparafrase ide yang sudah ada di esai.
+   - Periksa kemiripan semantik (bukan hanya teks permukaan).
 
-4. **Preserve Logical Accuracy:**
-   - The predicted sentence MUST NOT introduce false or contradictory information.
+4. **Pertahankan Akurasi Logis:**
+   - Kalimat prediksi TIDAK BOLEH memperkenalkan informasi yang salah atau kontradiktif.
 
-5. **Respect Contextual Consistency:**
-   - Align your sentence with the setting, tone, and real-world implications established by the essay.
-   - Use the contextual information and extracted vocabulary to maintain lexical cohesion.
+5. **Konsistensi Kontekstual:**
+   - Selaraskan kalimat Anda dengan latar, nada, dan implikasi dunia nyata yang sudah ditetapkan dalam esai.
+   - Gunakan informasi kontekstual dan kosakata terekstrak untuk menjaga kohesi leksikal.
 
-6. **Natural Integration:**
-   - The sentence should enhance paragraph flow, connect ideas logically, and sound natural.
+6. **Integrasi Alami:**
+   - Kalimat harus memperkuat alur paragraf, menghubungkan ide secara logis, dan terdengar alami.
 
-7. **Maintain Stylistic Consistency:**
-   - Match tone and lexical choices used in the essay.
-   - Avoid figurative or emotional shifts unless already present.
+7. **Jaga Konsistensi Gaya:**
+   - Samakan nada dan pilihan leksikal yang digunakan dalam esai.
+   - Hindari pergeseran figuratif atau emosional kecuali memang sudah ada.
 
-8. **Output a SINGLE Sentence Only.**
+8. **Keluarkan hanya SATU Kalimat.**
+
+Sederhanakan kalimat PASTIKAN kalimatnya ringkas dan tidak terlalu panjang.
 """
 
     # Response schema for the predicted sentence
@@ -1143,7 +1002,7 @@ Reasoning Summary:
     messages = [{"role": "user", "content": user_prompt}]
 
     # Send request to model
-    predict_sentence = client.beta.chat.completions.parse(
+    predict_sentence = _cached_chat_parse(
         model="gpt-5",  # or gpt-4o-mini, etc.
         reasoning_effort="low",
         messages=messages,
@@ -1159,49 +1018,14 @@ Reasoning Summary:
 
 # prediction check
 def get_or_create_sentence_pattern(sid, eid, current_content, history_content, purpose):
-    connection = None
-    try:
-        connection = pymysql.connect(**DB_CONFIG)
-        with connection.cursor() as cursor:
-            sql = "SELECT pattern_result FROM sentence_patterns WHERE sid=%s AND eid=%s"
-            cursor.execute(sql, (sid, eid))
-            row = cursor.fetchone()
-            print(f"[DEBUG] SELECT result row={row}")
-            if row:
-                if isinstance(row, dict):
-                    return row.get("pattern_result")
-                elif isinstance(row, (list, tuple)):
-                    return row[0]
-                else:
-                    return row
-
-            # 🔥 1. Generate new pattern (raw)
-            raw_result = identify_sentence_pattern(
-                current_content,
-                history_content,
-                purpose
-            )
-
-            # 🔥 2. Normalisasi agar bebas dari error
-            result = normalize_pattern_string(raw_result)
-
-            # 🔥 3. Simpan ke DB
-            insert_sql = """
-                INSERT INTO sentence_patterns (sid, eid, pattern_result)
-                VALUES (%s, %s, %s)
-                ON DUPLICATE KEY UPDATE pattern_result=VALUES(pattern_result)
-            """
-            cursor.execute(insert_sql, (sid, eid, result))
-            connection.commit()
-            return result
-
-    except Exception as e:
-        if connection:
-            connection.rollback()
-        raise RuntimeError(f"DB error in get_or_create_sentence_pattern: {str(e)}")
-    finally:
-        if connection:
-            connection.close()
+    # Keep sid/eid in signature for compatibility with existing callers.
+    _ = (sid, eid)
+    raw_result = identify_sentence_pattern(
+        current_content,
+        history_content,
+        purpose
+    )
+    return normalize_pattern_string(raw_result)
 
 
 
@@ -1241,6 +1065,11 @@ def normalize_pattern_string(value: str) -> str: # normalize "type:" from llm
 
             
 # Execute prediction
+async def _run_blocking(func, /, *args, **kwargs):
+    """Run blocking code in a worker thread to keep FastAPI event loop responsive."""
+    return await asyncio.to_thread(partial(func, *args, **kwargs))
+
+
 async def get_predict_sentence(
     sid: str,
     eid: int,
@@ -1306,27 +1135,33 @@ async def get_predict_sentence(
             elapsed = time.time() - batch_start
             print(f"[DEBUG] Batch retrieval (history + current) took {elapsed:.2f} s")
 
-            # 6. Retrieve or create sentence pattern
-            pattern_start = time.time()
-            best_match_sentence_pattern = get_or_create_sentence_pattern(
-                sid=sid,
-                eid=eid,
-                current_content=current_essay_content,
-                history_content=history_essay_content,
-                purpose=best_match_writing_purpose
+            # 6 & 7. Sentence pattern lookup + writing-style analysis concurrently
+            pattern_style_start = time.time()
+            sentence_pattern_task = asyncio.to_thread(
+                get_or_create_sentence_pattern,
+                sid,
+                eid,
+                current_essay_content,
+                history_essay_content,
+                best_match_writing_purpose,
             )
+            writing_style_task = asyncio.create_task(identify_writing_pattern(history_essay_content))
+
+            best_match_sentence_pattern, (
+                writing_patterns_formatted_output,
+                writing_features_formatted_output,
+            ) = await asyncio.gather(sentence_pattern_task, writing_style_task)
+
             if not best_match_sentence_pattern:
                 raise ValueError("Unable to obtain a sentence pattern for the prediction step.")
-            print(f"[DEBUG] Sentence-pattern lookup took {time.time() - pattern_start:.2f} s")
-
-            # 7. Analyze writing pattern & features
-            style_start = time.time()
-            writing_patterns_formatted_output, writing_features_formatted_output = identify_writing_pattern(history_essay_content)
             if not writing_patterns_formatted_output or not writing_features_formatted_output:
                 raise ValueError("Failed to identify writing patterns or features.")
-            print(f"[DEBUG] Writing-style analysis took {time.time() - style_start:.2f} s")
+            print(
+                f"[DEBUG] Sentence-pattern lookup + writing-style analysis took "
+                f"{time.time() - pattern_style_start:.2f} s"
+            )
 
-            # 8️ NEW: Vocabulary Extraction (for lexical insight)
+            # 8ï¸ NEW: Vocabulary Extraction (for lexical insight)
             # vocab_start = time.time()
             # vocabulary_info = extract_vocabulary_features(current_essay_content)
             # print(f"[DEBUG] Vocabulary extraction took {time.time() - vocab_start:.2f} s")
@@ -1344,7 +1179,7 @@ async def get_predict_sentence(
                 best_match_sentence_pattern,
                 writing_patterns_formatted_output,
                 writing_features_formatted_output,
-                # vocabulary_info  # ✅ new feature
+                # vocabulary_info  # âœ… new feature
             )
             if not final_predict_sentence:
                 raise ValueError("Model did not return a predicted sentence.")
@@ -1498,7 +1333,7 @@ def _normalize_judge_payload(payload: JudgeOutput) -> Dict[str, Any]:
             }
         )
 
-    prompt_revision_goal = payload.prompt_revision_goal.strip() or "Improve rubric weaknesses while keeping topic and style consistent."
+    prompt_revision_goal = payload.prompt_revision_goal.strip() or "Perbaiki kelemahan rubrik sambil mempertahankan topik dan konsistensi gaya."
     return {
         "scores": scores,
         "weighted_total": weighted_total,
@@ -1523,7 +1358,7 @@ def _call_structured_with_retry(
     last_error: Optional[Exception] = None
     for attempt in range(2):
         try:
-            response = client.beta.chat.completions.parse(
+            response = _cached_chat_parse(
                 model=model,
                 reasoning_effort="low",
                 messages=messages,
@@ -1536,7 +1371,7 @@ def _call_structured_with_retry(
         except Exception as exc:
             last_error = exc
             if attempt == 0:
-                messages.append({"role": "user", "content": "Return valid JSON only."})
+                messages.append({"role": "user", "content": "Kembalikan hanya JSON yang valid."})
                 continue
     raise RuntimeError(f"Structured model call failed: {last_error}")
 
@@ -1549,16 +1384,16 @@ def judge_prediction(context: Dict[str, Any], predicted_sentence: str) -> Dict[s
     extracted = _extract_surrounding_text(current_window)
 
     user_prompt = JUDGE_PROMPT_TEMPLATE.format(
-        title=title or "Untitled",
-        contextual_information=contextual_information or "No contextual information provided.",
+        title=title or "Tanpa Judul",
+        contextual_information=contextual_information or "Tidak ada informasi kontekstual yang diberikan.",
         prev_sentences=extracted["prev_sentences"],
         next_sentence=extracted["next_sentence"],
         candidate=predicted_sentence.strip(),
     )
 
     system_prompt = (
-        "You are a strict rubric evaluator for an EFL essay next-sentence prediction. "
-        "Return only JSON exactly following the schema."
+        "Anda adalah evaluator rubrik yang ketat untuk prediksi kalimat berikutnya pada esai EFL. "
+        "Kembalikan hanya JSON yang persis mengikuti skema."
     )
 
     raw = _call_structured_with_retry(
@@ -1582,8 +1417,8 @@ def revise_prompt_snapshot(prompt_snapshot: str, judge_json: Dict[str, Any]) -> 
         judge_json=judge_text,
     )
     system_prompt = (
-        "You revise the prompt snapshot used by a next-sentence generator. "
-        "You do NOT rewrite the sentence. Return JSON only."
+        "Anda merevisi prompt snapshot yang digunakan oleh generator kalimat berikutnya. "
+        "Anda TIDAK menulis ulang kalimatnya. Kembalikan hanya JSON."
     )
 
     def _forced_delta_snapshot(base_prompt: str, judge_data: Dict[str, Any], revision_label: str) -> Dict[str, Any]:
@@ -1596,15 +1431,15 @@ def revise_prompt_snapshot(prompt_snapshot: str, judge_json: Dict[str, Any]) -> 
                     hint = str(issue.get("fix_hint", "")).strip()
                     if hint:
                         hints.append(hint)
-        extra_lines = [f"- Revision label: {revision_label}"]
+        extra_lines = [f"- Label revisi: {revision_label}"]
         if goal:
-            extra_lines.append(f"- Priority goal: {goal}")
+            extra_lines.append(f"- Tujuan prioritas: {goal}")
         for idx, hint in enumerate(hints, start=1):
-            extra_lines.append(f"- Fix hint {idx}: {hint}")
+            extra_lines.append(f"- Petunjuk perbaikan {idx}: {hint}")
 
         forced_block = (
-            "\n\n# Revision Focus\n"
-            "Apply the following targeted constraints in the next generation:\n"
+            "\n\n# Fokus Revisi\n"
+            "Terapkan batasan terarah berikut pada generasi berikutnya:\n"
             + "\n".join(extra_lines)
             + "\n"
         )
@@ -1612,8 +1447,8 @@ def revise_prompt_snapshot(prompt_snapshot: str, judge_json: Dict[str, Any]) -> 
         return {
             "revised_prompt_snapshot": revised,
             "diff_summary": [
-                "Added explicit revision-focus block to enforce targeted prompt changes.",
-                f"Embedded revision label: {revision_label}.",
+                "Menambahkan blok fokus revisi eksplisit untuk memaksa perubahan prompt yang terarah.",
+                f"Menyematkan label revisi: {revision_label}.",
             ],
         }
 
@@ -1629,11 +1464,11 @@ def revise_prompt_snapshot(prompt_snapshot: str, judge_json: Dict[str, Any]) -> 
             raise ValueError("Missing revised_prompt_snapshot.")
         if revised_prompt_snapshot == prompt_snapshot.strip():
             fallback = _forced_delta_snapshot(prompt_snapshot, judge_payload, "auto-forced-change")
-            fallback["diff_summary"].insert(0, "Model returned unchanged prompt; forced minimal targeted delta.")
+            fallback["diff_summary"].insert(0, "Model mengembalikan prompt tanpa perubahan; diterapkan delta terarah minimal secara paksa.")
             return fallback
         clean_diff_summary = [str(item).strip() for item in diff_summary if str(item).strip()]
         if not clean_diff_summary:
-            clean_diff_summary = ["Prompt snapshot revised with targeted constraints from rubric feedback."]
+            clean_diff_summary = ["Prompt snapshot direvisi dengan batasan terarah berdasarkan umpan balik rubrik."]
         return {
             "revised_prompt_snapshot": revised_prompt_snapshot,
             "diff_summary": clean_diff_summary,
@@ -1662,71 +1497,87 @@ def run_prompt_self_improve(
     initial_prediction: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Run 3-step prompt-snapshot self-improvement:
-    predict -> judge -> revise prompt, repeated twice, then select the best.
+    One-shot self-improvement:
+    revise the initial predicted sentence in a single model request.
     """
     if not prompt_snapshot_v0 or not prompt_snapshot_v0.strip():
         raise ValueError("prompt_snapshot_v0 is required.")
 
-    prompt_v0 = prompt_snapshot_v0
-    pred1 = initial_prediction.strip() if initial_prediction else _predict_from_pcp_prompt(prompt_v0)
-    judge1 = judge_prediction(context, pred1)
-    judge1["_predicted_sentence"] = pred1
+    base_prediction = initial_prediction.strip() if initial_prediction else _predict_from_pcp_prompt(prompt_snapshot_v0)
+    surrounding = _extract_surrounding_text(str(context.get("current_window", "")))
+    title = str(context.get("title", "")).strip() or "Tanpa Judul"
+    writing_purpose = str(context.get("writing_purpose", "")).strip()
+    contextual_information = str(context.get("contextual_information", "")).strip()
 
-    revise1 = revise_prompt_snapshot(prompt_v0, judge1)
-    prompt_v1 = revise1["revised_prompt_snapshot"]
-    pred2 = _predict_from_pcp_prompt(prompt_v1)
-    judge2 = judge_prediction(context, pred2)
-    judge2["_predicted_sentence"] = pred2
+    class OneShotSelfImproveOutput(BaseModel):
+        improved_sentence: str
+        short_reason: str = ""
 
-    revise2 = revise_prompt_snapshot(prompt_v1, judge2)
-    prompt_v2 = revise2["revised_prompt_snapshot"]
-    pred3 = _predict_from_pcp_prompt(prompt_v2)
-    judge3 = judge_prediction(context, pred3)
-    judge3["_predicted_sentence"] = pred3
+    user_prompt = f"""Anda adalah editor kalimat prediksi esai.
+Perbaiki SATU kalimat prediksi agar:
+- relevan dengan topik dan tujuan penulisan,
+- tidak redundan,
+- alami dengan kalimat sebelum/sesudahnya,
+- tidak menambah fakta baru yang tidak didukung konteks.
+- Sederhanakan kalimat PASTIKAN kalimatnya ringkas dan tidak terlalu panjang.
 
-    candidates = [
-        {
-            "index": 1,
-            "prompt_snapshot": prompt_v0,
-            "predicted_sentence": pred1,
-            "judge": judge1,
-            "diff_summary": revise1["diff_summary"],
-            "next_prompt_snapshot": prompt_v1,
-        },
-        {
-            "index": 2,
-            "prompt_snapshot": prompt_v1,
-            "predicted_sentence": pred2,
-            "judge": judge2,
-            "diff_summary": revise2["diff_summary"],
-            "next_prompt_snapshot": prompt_v2,
-        },
-        {
-            "index": 3,
-            "prompt_snapshot": prompt_v2,
-            "predicted_sentence": pred3,
-            "judge": judge3,
-            "diff_summary": [],
-            "next_prompt_snapshot": None,
-        },
-    ]
-    best_candidate = max(candidates, key=_prediction_rank_key)
+Judul:
+{title}
 
-    debug_log = {
-        "iterations": candidates,
-        "selected_index": best_candidate["index"],
-    }
+Tujuan Penulisan:
+{writing_purpose}
 
+Informasi Kontekstual:
+{contextual_information}
+
+Kalimat sebelum:
+{surrounding.get("prev_sentences", "")}
+
+Kalimat sesudah:
+{surrounding.get("next_sentence", "")}
+
+Kalimat awal:
+{base_prediction}
+
+Kembalikan JSON valid dengan key:
+- improved_sentence
+- short_reason
+"""
+
+    improved_sentence = base_prediction
+    short_reason = "Fallback to initial prediction."
+    try:
+        response = _cached_chat_parse(
+            model="gpt-4o-mini",
+            reasoning_effort="low",
+            messages=[{"role": "user", "content": user_prompt}],
+            response_format=OneShotSelfImproveOutput,
+            use_cache=False,
+        )
+        parsed = response.choices[0].message.parsed
+        candidate = str(parsed.improved_sentence).strip()
+        if candidate:
+            improved_sentence = candidate
+        reason_text = str(parsed.short_reason).strip()
+        if reason_text:
+            short_reason = reason_text
+    except Exception as exc:
+        print(f"[WARNING] One-shot self-improve failed; using initial prediction: {exc}")
+
+    zero_scores = {category: 0.0 for category in RUBRIC_CATEGORIES}
     return {
-        "best_predicted_sentence": best_candidate["predicted_sentence"],
+        "best_predicted_sentence": improved_sentence,
         "best_score_summary": {
-            "scores": best_candidate["judge"]["scores"],
-            "weighted_total": best_candidate["judge"]["weighted_total"],
-            "verdict": best_candidate["judge"]["verdict"],
+            "scores": zero_scores,
+            "weighted_total": 0.0,
+            "verdict": "one_shot",
         },
-        "best_prompt_snapshot": best_candidate["prompt_snapshot"],
-        "debug_log": debug_log,
+        "best_prompt_snapshot": prompt_snapshot_v0,
+        "debug_log": {
+            "mode": "one_shot",
+            "base_prediction": base_prediction,
+            "short_reason": short_reason,
+        },
     }
 
 ## user judgement ###
@@ -1803,13 +1654,13 @@ class PcpReviserGpt52:
     ) -> List[Dict[str, str]]:
         ctx_text = json.dumps(ctx, ensure_ascii=True, indent=2)
         system_prompt = (
-            "You are a deterministic prompt revision agent. "
-            "Return ONLY valid JSON with keys: revised_pcp_prompt, short_revision_rationale. "
-            "Do not include any extra keys, code fences, or commentary."
+            "Anda adalah agen revisi prompt yang deterministik. "
+            "Kembalikan HANYA JSON valid dengan key: revised_pcp_prompt, short_revision_rationale. "
+            "Jangan sertakan key tambahan, code fence, atau komentar."
         )
-        user_prompt = f"""Revise the PCP prompt to improve semantic alignment.
+        user_prompt = f"""Revisi prompt PCP untuk meningkatkan keselarasan semantik.
 
-Inputs:
+Input:
 prev_pcp_prompt:
 <<<
 {prev_pcp}
@@ -1827,13 +1678,13 @@ similarity_score (0..1):
 current_essay_context_summary (JSON):
 {ctx_text}
 
-Rules:
-- Revise the prompt.
-- Keep the prediction aligned to the essay topic and purpose.
-- give keyword related to original sentence.
-- Output JSON only with:
+Aturan:
+- Revisi prompt.
+- Pastikan prediksi tetap selaras dengan topik dan tujuan esai.
+- Berikan kata kunci yang terkait dengan kalimat asli.
+- Keluarkan JSON saja dengan:
   - revised_pcp_prompt (string)
-  - short_revision_rationale (string, <= 80 words)
+  - short_revision_rationale (string, <= 80 kata)
 """
         return [
             {"role": "system", "content": system_prompt},
@@ -1866,7 +1717,7 @@ Rules:
         for attempt in range(2):
             try:
                 response = self._client.chat.completions.create(
-                    model="gpt-5.2",
+                    model="gpt-5-nano-2025-08-07",
                     messages=messages,
                     temperature=0,
                     response_format={"type": "json_object"},
@@ -1907,8 +1758,8 @@ def _predict_from_pcp_prompt(pcp_prompt: str) -> str:
     class PredictSentence(BaseModel):
         predict_sentence: str
 
-    response = client.beta.chat.completions.parse(
-        model="gpt-5",
+    response = _cached_chat_parse(
+        model="gpt-5-nano-2025-08-07",
         reasoning_effort="low",
         messages=[{"role": "user", "content": pcp_prompt}],
         response_format=PredictSentence,
@@ -2018,5 +1869,3 @@ def run_feedback_loop(
         "revision_rationale": rationale,
         "revised_pcp_prompt": revised_pcp,
     }
-
-

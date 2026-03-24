@@ -1,4 +1,4 @@
-// Global variables
+﻿// Global variables
 let imageCount = 0;
 
 // Configuration
@@ -8,33 +8,32 @@ const CONFIG = {
   ANALYSIS_TIMER: 1000,
 };
 
-// Error messages
+// Galat messages
 const ERROR_MESSAGES = {
   fileType: {
-    title: "Invalid File Type",
-    text: "Please upload JPG, PNG or WEBP files only",
+    title: "Jenis File Tidak Valid",
+    text: "Silakan unggah file JPG, PNG, atau WEBP saja",
   },
   maxImages: {
-    title: "Maximum Limit Reached",
-    text: "You can upload up to 3 images only",
+    title: "Batas Maksimum Tercapai",
+    text: "Anda hanya dapat mengunggah hingga 3 gambar",
   },
   emptyTitle: {
-    title: "Title Required",
-    text: "Please enter an essay title",
+    title: "Judul Wajib Diisi",
+    text: "Silakan masukkan judul esai",
   },
   noImage: {
-    title: "No Image",
-    text: "Please upload at least one image",
+    title: "Belum Ada Gambar",
+    text: "Silakan unggah setidaknya satu gambar",
   },
   unanalyzedImage: {
-    title: "Incomplete Analysis",
-    text: "Please ensure all uploaded images are analyzed",
+    title: "Analisis Belum Lengkap",
+    text: "Pastikan semua gambar yang diunggah sudah dianalisis",
   },
 };
 
 // Initialize page when DOM is loaded
 document.addEventListener("DOMContentLoaded", async function () {
-  // 等待元素載入
   function waitForElement(selector) {
     return new Promise((resolve) => {
       const element = document.querySelector(selector);
@@ -56,7 +55,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
   }
 
-  // 等待所有腳本載入
   const waitForScripts = () => {
     return new Promise((resolve) => {
       if (document.readyState === "complete") {
@@ -73,80 +71,78 @@ document.addEventListener("DOMContentLoaded", async function () {
         <div class="setup-container">
           <div class="setup-content">
             <div class="page-header">
-              <h1 id="title-step" class="google-style-heading">Homework Demo: My favorite food</h1>
-              <h2 class="google-style-subheading">Writing Preparation</h2>
+              <h1 id="title-step" class="google-style-heading">Demo Tugas: Makanan favorit saya</h1>
+              <h2 class="google-style-subheading">Persiapan Menulis</h2>
             </div>
 
-            <!-- 作業說明 -->
+            <!-- Petunjuk tugas -->
             <div id="instruction-step" class="setup-instructions">
               <div class="instruction-content">
-                <p class="instruction-intro"><b>Please share a food that left a deep impression on you. You can describe its taste, appearance, and smell, as well as where and with whom you ate it. You can also explain why this dish was special and memorable to you.</b></p>
-                <p class="instruction-intro">Follow these steps to prepare your essay:</p>
+                <p class="instruction-intro"><b>Ceritakan makanan yang meninggalkan kesan mendalam bagi Anda. Anda dapat menjelaskan rasa, tampilan, dan aromanya, serta di mana dan dengan siapa Anda menikmatinya. Anda juga dapat menjelaskan mengapa hidangan ini begitu istimewa dan berkesan bagi Anda.</b></p>
+                <p class="instruction-intro">Ikuti langkah-langkah berikut untuk menyiapkan esai Anda:</p>
                 <ol class="instruction-list">
                   <li>
                     <span class="step-number">1</span>
-                    <span class="step-text">Enter an essay title that according to the homework topic.</span>
+                    <span class="step-text">Masukkan judul esai yang sesuai dengan topik tugas.</span>
                   </li>
                   <li>
                     <span class="step-number">2</span>
-                    <span class="step-text">Upload up to 3 images that will be used as references
+                    <span class="step-text">Unggah hingga 3 gambar yang akan digunakan sebagai referensi
                       <ul>
-                        <li>The allowed image formats for upload are ".jpg", ".png", and ".webp".</li>
+                        <li>Format gambar yang diperbolehkan untuk diunggah adalah ".jpg", ".png", dan ".webp".</li>
                       </ul>
                     </span>                      
                   </li>
                   <li>
                     <span class="step-number">3</span>
-                    <span class="step-text">For each image:
+                    <span class="step-text">Untuk setiap gambar:
                       <ul>
-                        <li>Click "Analyze Image" to generate AI-powered keywords and descriptions</li>
-                        <li>Review and modify the generated keywords and descriptions if needed</li>
+                        <li>Klik "Analisis Gambar" untuk menghasilkan kata kunci dan deskripsi dengan bantuan AI</li>
+                        <li>Tinjau dan ubah kata kunci serta deskripsi yang dihasilkan bila diperlukan</li>
                       </ul>
                     </span>
                   </li>
                   <li>
                     <span class="step-number">4</span>
-                    <span class="step-text">Click "Start" when you're ready to begin writing your essay</span>
+                    <span class="step-text">Klik "Mulai" saat Anda siap mulai menulis esai</span>
                   </li>
                 </ol>
               </div>
             </div>
             
             <div class="setup-section">
-              <label class="google-label">Essay Title</label>
+              <label class="google-label">Judul Esai</label>
               <input type="text" id="essay-title-step" class="google-input" 
-                     placeholder="Enter Essay title" required>
+                     placeholder="Masukkan judul esai" required>
             </div>
       
             <div id="upload-step" class="setup-section">
-              <label class="google-label">Image Upload (Max ${CONFIG.MAX_IMAGES})</label>
+              <label class="google-label">Unggah Gambar (Maks. ${CONFIG.MAX_IMAGES})</label>
               <div id="imageUploadContainer"></div>
               <button class="google-button secondary" id="addImageBtn" 
                       onclick="addImageUploadBlock()">
-                <i class="fas fa-plus"></i> Add Image
+                <i class="fas fa-plus"></i> Tambah Gambar
               </button>
             </div>
       
             <div id="action-step" class="setup-actions">
               <button class="google-button secondary" onclick="window.history.back()">
-                Back
+                Kembali
               </button>
               <button class="google-button primary" id="nextButton" 
                       onclick="validateAndProceed()">
-                Start
+                Mulai
               </button>
             </div>
           </div>
         </div>
       `;
 
-    // 初始化頁面內容
     await initializeSetupPage();
   };
 
   const initializeSetupPage = async () => {
     addImageUploadBlock();
-    // 確保所有必要元素都已載入
     await Promise.all([
       waitForElement("#title-step"),
       waitForElement("#instruction-step"),
@@ -166,19 +162,19 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       const driverObj = window.driver.js.driver({
         animate: true,
-        opacity: 0.75, // 調高遮罩透明度，讓背景更暗
+        opacity: 0.75,
         // showProgress: true,
         allowClose: false,
         overlayClickNext: true,
         showButtons: ["next", "previous"],
         className: "driverjs-theme",
         popoverClass: "driver-popover",
-        stageBackground: "#ffffff",
+        stageKembaliground: "#ffffff",
         allowKeyboardControl: true,
         disableActiveInteraction: false,
         onPopoverRender: (popover, { config, state }) => {
           const firstButton = document.createElement("button");
-          firstButton.innerText = "Skip";
+          firstButton.innerText = "Lewati";
           popover.footerButtons.appendChild(firstButton);
 
           firstButton.addEventListener("click", () => {
@@ -189,9 +185,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           {
             element: "#title-step",
             popover: {
-              title: "Homework Topic",
+              title: "Topik Tugas",
               description:
-                "Here, your homework topic will be set, and you need to come up with your essay title and a contextual image based on this topic.",
+                "Di sini topik tugas akan ditetapkan, dan Anda perlu menyiapkan judul esai serta gambar kontekstual berdasarkan topik tersebut.",
               position: "bottom",
               side: "left",
               align: "start",
@@ -200,9 +196,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           {
             element: "#instruction-step",
             popover: {
-              title: "Writing Instructions",
+              title: "Petunjuk Menulis",
               description:
-                "Here you will find detailed instructions. Please read them carefully!",
+                "Di sini Anda akan menemukan petunjuk rinci. Mohon baca dengan saksama!",
               position: "right",
               side: "left",
               align: "start",
@@ -211,9 +207,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           {
             element: "#essay-title-step",
             popover: {
-              title: "Enter Your Title",
+              title: "Masukkan Judul Anda",
               description:
-                "Type in your essay title here. Make sure it matches the topic!",
+                "Ketik judul esai Anda di sini. Pastikan sesuai dengan topik!",
               position: "bottom",
               side: "left",
               align: "start",
@@ -222,8 +218,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           {
             element: "#upload-step",
             popover: {
-              title: "Image Upload Section",
-              description: "You can upload images related to the topic here.",
+              title: "Bagian Unggah Gambar",
+              description: "Anda dapat mengunggah gambar yang terkait dengan topik di sini.",
               position: "left",
               side: "left",
               align: "start",
@@ -232,9 +228,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           {
             element: ".upload-area",
             popover: {
-              title: "Upload Area",
+              title: "Area Unggah",
               description:
-                "You can click or drag and drop images into this area to upload them.<br><br><b>(Only images in jpg, png, or webp format are allowed!)</b>",
+                "Anda dapat mengeklik atau menyeret gambar ke area ini untuk mengunggahnya.<br><br><b>(Hanya gambar berformat jpg, png, atau webp yang diperbolehkan!)</b>",
               position: "top",
               side: "left",
               align: "start",
@@ -242,24 +238,24 @@ document.addEventListener("DOMContentLoaded", async function () {
           },
           {
             popover: {
-              title: "Image Analysis",
+              title: "Analisis Gambar",
               description: `
   <div style="text-align: left; padding: 10px;">
-      <p>After uploading the image, an <b>"Analyze Image"</b> button will appear.<br>Click it to start the analysis. Once the analysis results are available, you can proceed with the following actions:</p>
+      <p>Setelah gambar diunggah, tombol <b>"Analisis Gambar"</b> akan muncul.<br>Klik tombol tersebut untuk memulai analisis. Setelah hasil analisis tersedia, Anda dapat melanjutkan dengan langkah berikut:</p>
     <div style="margin-bottom: 20px;">
       <div style="margin-bottom: 15px;">
-        <strong style="color: #1a73e8;">1. Generate Keywords</strong>
+        <strong style="color: #1a73e8;">1. Hasilkan Kata Kunci</strong>
         <ul style="margin: 8px 0 0 20px; padding: 0;">
-          <li style="margin: 5px 0;">AI will automatically generate keywords to describe your image</li>
-          <li style="margin: 5px 0;">You can add or remove keywords as needed</li>
+          <li style="margin: 5px 0;">AI akan secara otomatis menghasilkan kata kunci untuk menggambarkan gambar Anda</li>
+          <li style="margin: 5px 0;">Anda dapat menambah atau menghapus kata kunci sesuai kebutuhan</li>
         </ul>
       </div>
   
       <div style="margin-bottom: 15px;">
-        <strong style="color: #1a73e8;">2. Generate Description</strong>
+        <strong style="color: #1a73e8;">2. Hasilkan Deskripsi</strong>
         <ul style="margin: 8px 0 0 20px; padding: 0;">
-          <li style="margin: 5px 0;">AI will create a detailed description of your image</li>
-          <li style="margin: 5px 0;">You can modify the description to better match your memory</li>
+          <li style="margin: 5px 0;">AI akan membuat deskripsi rinci untuk gambar Anda</li>
+          <li style="margin: 5px 0;">Anda dapat mengubah deskripsi agar lebih sesuai dengan ingatan Anda</li>
         </ul>
       </div>
     </div>
@@ -270,9 +266,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           {
             element: "#addImageBtn",
             popover: {
-              title: "Add More Images",
+              title: "Tambah Gambar Lagi",
               description:
-                "Click this button to add more images (maximum 3 images allowed).",
+                "Klik tombol ini untuk menambahkan gambar lain (maksimal 3 gambar).",
               position: "right",
               side: "top",
               align: "center",
@@ -281,9 +277,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           {
             element: "#action-step",
             popover: {
-              title: "Ready to Write",
+              title: "Siap Menulis",
               description:
-                'After completing all steps, click <b>"Start"</b> to begin writing your essay.',
+                'Setelah semua langkah selesai, klik <b>"Mulai"</b> untuk mulai menulis esai Anda.',
               position: "top",
               side: "top",
               align: "end",
@@ -291,29 +287,29 @@ document.addEventListener("DOMContentLoaded", async function () {
           },
           {
             popover: {
-              title: "After finishing the guidance...",
+              title: "Setelah panduan selesai...",
               description: `
   <div style="text-align: left; padding: 10px;">    
     <div style="margin-bottom: 20px;">
       <div style="margin-bottom: 15px;">
-        <strong style="color: #1a73e8;">1. Try adding a title.</strong>
+        <strong style="color: #1a73e8;">1. Coba tambahkan judul.</strong>
         <ul style="margin: 8px 0 0 20px; padding: 0;">
-          <li style="margin: 5px 0;">Set your essay title based on the homework topic.</li>
+          <li style="margin: 5px 0;">Tetapkan judul esai berdasarkan topik tugas.</li>
         </ul>
       </div>
   
       <div style="margin-bottom: 15px;">
-        <strong style="color: #1a73e8;">2. Try analyzing an image.</strong>
+        <strong style="color: #1a73e8;">2. Coba analisis sebuah gambar.</strong>
         <ul style="margin: 8px 0 0 20px; padding: 0;">
-          <li style="margin: 5px 0;">Click the upload area to load a default image.</li>
-          <li style="margin: 5px 0;">Click "Analyze Image" to generate default keywords and descriptions.</li>
-          <li style="margin: 5px 0;">Try adding or deleting image keywords.</li>
-          <li style="margin: 5px 0;">Try modifying the image description.</li>
+          <li style="margin: 5px 0;">Klik area unggah untuk memuat gambar bawaan.</li>
+          <li style="margin: 5px 0;">Klik "Analisis Gambar" untuk menghasilkan kata kunci dan deskripsi bawaan.</li>
+          <li style="margin: 5px 0;">Coba tambah atau hapus kata kunci gambar.</li>
+          <li style="margin: 5px 0;">Coba ubah deskripsi gambar.</li>
         </ul>
       </div>
 
        <div style="margin-bottom: 15px;">
-        <strong style="color: #1a73e8;">3. Try click "Start" go to writing guidance.</strong>
+        <strong style="color: #1a73e8;">3. Coba klik "Mulai" untuk menuju panduan menulis.</strong>
       </div>
     </div>
     </div>`,
@@ -323,7 +319,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         ],
       });
 
-      // 開始導覽
       await driverObj.drive();
     } catch (error) {
       console.error("Failed to initialize driver:", error);
@@ -331,13 +326,10 @@ document.addEventListener("DOMContentLoaded", async function () {
   };
 
   try {
-    // 等待所有腳本載入完成
     await waitForScripts();
 
-    // 生成頁面內容
     await generateSetupPage();
 
-    // 確保 driver.js 已載入
     await new Promise((resolve) => {
       const checkDriver = () => {
         if (window.driver) {
@@ -349,7 +341,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       checkDriver();
     });
 
-    // 初始化 driver.js
     await initializeDriver();
   } catch (error) {
     console.error("Failed to initialize page:", error);
@@ -390,14 +381,14 @@ function addImageUploadBlock() {
       <div class="upload-area" id="uploadArea_${imageCount}">
         <div class="upload-placeholder">
           <i class="fas fa-cloud-upload-alt"></i>
-          <p>Drag and drop image here or click to upload</p>
+          <p>Seret dan lepaskan gambar di sini atau klik untuk mengunggah</p>
         </div>
         <input type="file" id="imageUpload_${imageCount}" accept="image/*" hidden>
       </div>
       <button class="delete-upload-area" 
               id="cancelUpload_${imageCount}"
               onclick="removeUploadArea('${blockId}')">
-        <i class="fas fa-times"></i> Cancel Upload
+        <i class="fas fa-times"></i> Batalkan Unggah
       </button>
     </div>
 
@@ -407,7 +398,7 @@ function addImageUploadBlock() {
           <img id="imagePreview_${imageCount}" src="" alt="Preview">
           <button class="google-button danger remove-image" 
                   onclick="removeImage('${blockId}')">
-            <i class="fas fa-trash"></i> Delete Image
+            <i class="fas fa-trash"></i> Hapus Gambar
           </button>
         </div>
         
@@ -415,32 +406,32 @@ function addImageUploadBlock() {
           <button class="google-button primary analyze-btn" 
                   id="analyzeBtn_${imageCount}" 
                   onclick="analyzeImage(${imageCount})">
-            <i class="fas fa-magic"></i> Analyze Image
+            <i class="fas fa-magic"></i> Analisis Gambar
           </button>
           
           <div class="analysis-results" id="analysisResults_${imageCount}" 
                style="display: none;">
             <div class="keywords-section">
-              <label class="google-label">Image Keywords</label>
+              <label class="google-label">Kata Kunci Gambar</label>
               <div class="keywords-chips" id="keywordsChips_${imageCount}"></div>
               <div class="keyword-input-group">
                 <input type="text" class="google-input" 
                        id="keywordInput_${imageCount}" 
-                       placeholder="Enter keyword">
+                       placeholder="Masukkan kata kunci">
                 <button class="google-button primary add-keyword-btn" 
                         onclick="addKeywordFromInput(${imageCount})">
-                  <i class="fas fa-plus"></i> Add
+                  <i class="fas fa-plus"></i> Tambah
                 </button>
               </div>
             </div>
             
             <div class="description-section">
-              <label class="google-label">Image Description</label>
+              <label class="google-label">Deskripsi Gambar</label>
               <textarea class="google-input description" 
                         id="imageDescription_${imageCount}"></textarea>
               <button class="google-button secondary regenerate-btn" 
                       onclick="regenerateAnalysis(${imageCount})">
-                <i class="fas fa-sync-alt"></i> Regenerate
+                <i class="fas fa-sync-alt"></i> Buat Ulang
               </button>
             </div>
           </div>
@@ -479,14 +470,12 @@ function initializeImageBlock(index) {
     handleImageUpload(null, index);
   });
 
-  // Click upload handler - 直接呼叫 handleImageUpload
   uploadArea.addEventListener("click", () => {
     handleImageUpload(null, index);
   });
 
   // Keyword input handler
   if (keywordInput) {
-    // Enter 鍵新增關鍵字
     keywordInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -494,7 +483,6 @@ function initializeImageBlock(index) {
       }
     });
 
-    // Add 按鈕新增關鍵字
     const addKeywordBtn = keywordInput.nextElementSibling;
     if (addKeywordBtn) {
       addKeywordBtn.addEventListener("click", (e) => {
@@ -511,7 +499,6 @@ function addKeywordFromInput(index) {
   const keyword = input.value.trim();
 
   if (keyword) {
-    // 檢查是否已存在相同的關鍵字
     const existingKeywords = Array.from(
       document
         .getElementById(`keywordsChips_${index}`)
@@ -520,12 +507,11 @@ function addKeywordFromInput(index) {
 
     if (!existingKeywords.includes(keyword)) {
       addKeywordChip(keyword, index);
-      input.value = ""; // 清空輸入框
+      input.value = "";
     } else {
-      // 如果關鍵字已存在，顯示提示
       Swal.fire({
-        title: "Duplicate Keyword",
-        text: "This keyword already exists",
+        title: "Kata Kunci Duplikat",
+        text: "Kata kunci ini sudah ada",
         icon: "warning",
         timer: 1500,
         showConfirmButton: false,
@@ -536,14 +522,11 @@ function addKeywordFromInput(index) {
 
 // Handle image upload and preview
 function handleImageUpload(file, index) {
-  // 使用預設的牛肉麵圖片 - 改用較穩定的圖片網址
   const defaultImageUrl = "/static/assets/img/demo.jpg";
 
   const previewImg = document.getElementById(`imagePreview_${index}`);
 
-  // 先設定圖片載入事件
   previewImg.onload = function () {
-    // 計算等比例縮放尺寸
     const containerWidth = CONFIG.IMAGE_CONTAINER_SIZE;
     const containerHeight = CONFIG.IMAGE_CONTAINER_SIZE;
     let width = this.naturalWidth;
@@ -553,26 +536,22 @@ function handleImageUpload(file, index) {
     width *= ratio;
     height *= ratio;
 
-    // 設置圖片尺寸
     this.style.width = `${width}px`;
     this.style.height = `${height}px`;
 
-    // 在圖片載入完成後顯示預覽區域
     document.getElementById(`uploadArea_${index}`).style.display = "none";
     document.getElementById(`cancelUpload_${index}`).style.display = "none";
     document.getElementById(`previewSection_${index}`).style.display = "block";
   };
 
   previewImg.onerror = function () {
-    // 圖片載入失敗時顯示錯誤訊息
     Swal.fire({
       icon: "error",
-      title: "Image Load Error",
-      text: "Failed to load the image. Please try again.",
+      title: "Galat Memuat Gambar",
+      text: "Gagal memuat gambar. Silakan coba lagi.",
     });
   };
 
-  // 最後設定圖片來源以觸發載入
   previewImg.src = defaultImageUrl;
 }
 
@@ -581,8 +560,8 @@ async function analyzeImage(index) {
   try {
     // Show loading state
     Swal.fire({
-      title: "Analyzing Image",
-      text: "Please wait...",
+      title: "Sedang menganalisis gambar",
+      text: "Mohon tunggu...",
       allowOutsideClick: false,
       didOpen: () => {
         Swal.showLoading();
@@ -640,8 +619,8 @@ async function analyzeImage(index) {
     Swal.close();
   } catch (error) {
     Swal.fire({
-      title: "Error",
-      text: "Failed to analyze image",
+      title: "Galat",
+      text: "Gagal menganalisis gambar",
       icon: "error",
     });
   }
@@ -652,29 +631,23 @@ function updateImageAnalysis(index, data) {
   const descriptionInput = document.getElementById(`imageDescription_${index}`);
   const analysisResults = document.getElementById(`analysisResults_${index}`);
 
-  // 儲存原始分析結果到元素的 dataset 中
   keywordsContainer.dataset.originalKeywords = JSON.stringify(data.keywords);
   descriptionInput.dataset.originalDescription = data.description;
 
-  // 清空現有的關鍵字
   keywordsContainer.innerHTML = "";
 
-  // 顯示關鍵字
   data.keywords.forEach((keyword) => {
     if (keyword && typeof keyword === "string") {
       addKeywordChip(keyword.trim(), index);
     }
   });
 
-  // 顯示描述文字
   if (data.description && typeof data.description === "string") {
     descriptionInput.value = data.description.trim();
   }
 
-  // 顯示分析結果區域
   analysisResults.style.display = "block";
 
-  // 隱藏分析按鈕
   const analyzeBtn = document.getElementById(`analyzeBtn_${index}`);
   if (analyzeBtn) {
     analyzeBtn.style.display = "none";
@@ -692,7 +665,7 @@ function addKeywordChip(keyword, index) {
   document.getElementById(`keywordsChips_${index}`).appendChild(chip);
 }
 
-// Regenerate analysis
+// Buat Ulang analysis
 async function regenerateAnalysis(index) {
   const analysisResults = document.getElementById(`analysisResults_${index}`);
   document.getElementById(`keywordsChips_${index}`).innerHTML = "";
@@ -717,7 +690,6 @@ function removeImage(blockId) {
 
 // Validate and proceed
 async function validateAndProceed() {
-  // 基本驗證
   const title = document.getElementById("essay-title-step").value.trim();
   if (!title) {
     await Swal.fire({
@@ -727,7 +699,6 @@ async function validateAndProceed() {
     return;
   }
 
-  // 圖片驗證
   const imageBlocks = document.querySelectorAll(".image-block");
   if (imageBlocks.length === 0) {
     await Swal.fire({
@@ -737,7 +708,6 @@ async function validateAndProceed() {
     return;
   }
 
-  // 檢查未分析的圖片
   if (
     [...imageBlocks].some(
       (block) => block.querySelector(".analyze-btn")?.style.display !== "none"
@@ -750,7 +720,6 @@ async function validateAndProceed() {
     return;
   }
 
-  // 收集資料
   const setupData = {
     title: title,
     images: [...imageBlocks].map((block, index) => ({
@@ -762,18 +731,17 @@ async function validateAndProceed() {
           ?.getElementsByClassName("keyword-chip") || []
       ).map((el) => el.textContent.trim().replace("×", "")),
     })),
-    eid: "default_essay_id", // 使用預設的 essay ID
+    eid: "default_essay_id",
   };
 
-  // 顯示確認對話框
   const result = await Swal.fire({
-    title: "Ready to Start Your Homework?",
+    title: "Siap Memulai Tugas Anda?",
     html: `
       <div class="confirmation-dialog">
         <p class="confirmation-message">
-          Please confirm that your <b>Title, Uploaded Images, and Analyzed Context Information</b> are correct.
+          Pastikan <b>Judul, Gambar yang Diunggah, dan Informasi Konteks Hasil Analisis</b> sudah benar.
           <br><br>
-          Click "Start" when you're ready to begin.
+          Klik "Mulai" saat Anda siap mulai.
         </p>
         <div class="confirm-button-wrapper">
           <div class="countdown-overlay"></div>
@@ -782,8 +750,8 @@ async function validateAndProceed() {
     `,
     icon: "info",
     showCancelButton: true,
-    confirmButtonText: "Start",
-    cancelButtonText: "Go Back",
+    confirmButtonText: "Mulai",
+    cancelButtonText: "Kembali",
     confirmButtonColor: "#1a73e8",
     cancelButtonColor: "#dc3545",
     allowOutsideClick: false,
@@ -801,18 +769,22 @@ async function validateAndProceed() {
 
   if (result.isConfirmed) {
     try {
-      // 儲存設定資料
       sessionStorage.setItem("hwDemoWritingSetup", JSON.stringify(setupData));
 
-      // 直接轉至寫作頁面
       window.location.href = "/hw_writing_instruct";
     } catch (error) {
       await Swal.fire({
         icon: "error",
-        title: "Error",
-        text: "Failed to proceed to writing page",
+        title: "Galat",
+        text: "Gagal melanjutkan ke halaman menulis",
         confirmButtonColor: "#dc3545",
       });
     }
   }
 }
+
+
+
+
+
+

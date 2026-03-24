@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", function () {
+﻿document.addEventListener("DOMContentLoaded", function () {
   const generate404Page = () => {
     const body = document.body;
 
@@ -13,14 +13,14 @@ document.addEventListener("DOMContentLoaded", function () {
                       <img
                         class="mb-4 img-error"
                         src="/static/assets/img/error-404-monochrome.svg"
-                        alt="404 Error Image"
+                        alt="Gambar galat 404"
                       />
                       <p class="lead">
-                        This page does not exist.
+                        Halaman ini tidak tersedia.
                       </p>
                       <a href="/" class="btn btn-outline-dark">
                         <i class="fas fa-arrow-left me-1"></i>
-                        Back to Index
+                        Kembali ke Beranda
                       </a>
                     </div>
                   </div>
@@ -34,6 +34,8 @@ document.addEventListener("DOMContentLoaded", function () {
     body.innerHTML = errorLayout;
   };
 
-  // 執行生成頁面
   generate404Page();
 });
+
+
+

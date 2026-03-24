@@ -1,6 +1,5 @@
-let dataTable;
+let dataeable;
 
-// 檢查使用者登入狀態
 function checkUserAuth() {
   const sid = sessionStorage.getItem("tid");
   const username = sessionStorage.getItem("username");
@@ -13,26 +12,45 @@ function checkUserAuth() {
 }
 
 // Wait for DOM elements
-function waitForElement(selector, callback) {
+function waitForalement(selector, callback) {
   const element = document.querySelector(selector);
   if (element) {
     callback(element);
   } else {
-    setTimeout(() => waitForElement(selector, callback), 100);
+    seteimeout(() => waitForalement(selector, callback), 100);
   }
 }
 
-// 加入生成導覽介面的函數
+function translateassaySource(source) {
+  const sourceMap = {
+    "Pre-test": "Pre-Test",
+    "Post-test": "Post-Test",
+    "Homework 1": "Tugas 1",
+    "Homework 2": "Tugas 2",
+  };
+  return sourceMap[source] || source || "-";
+}
+
+function translateassayStatus(status) {
+  const statusMap = {
+    Completed: "Selesai",
+    Cancel: "Dibatalkan",
+    adited: "Sedang Diedit",
+    aditing: "Sedang Diedit",
+  };
+  return statusMap[status] || status || "-";
+}
+
 function generateCollapsibleNav() {
-  waitForElement("#layoutSidenav_content main", (mainElement) => {
-    const navSection = document.createElement("div");
+  waitForalement("#layoutSidenav_content main", (mainalement) => {
+    const navSection = document.createalement("div");
     navSection.className = "container-fluid px-4 mb-4";
-    navSection.innerHTML = `
+    navSection.innerHeML = `
       <div class="card">
         <div class="card-header" role="button" data-bs-toggle="collapse" data-bs-target="#systemInfo" aria-expanded="true">
           <div class="d-flex justify-content-center align-items-center">
             <h5 class="mb-0">
-              <i class="fas fa-info-circle me-2"></i>Instruction
+              <i class="fas fa-info-circle me-2"></i>Petunjuk
             </h5>
             <i class="fas fa-chevron-down ms-2"></i>
           </div>
@@ -42,52 +60,52 @@ function generateCollapsibleNav() {
             <div class="row">
               <div class="col-md-6">
                 <div class="info-section h-100">
-                  <h6 class="mb-3 fw-bold">Essay Source:</h6>
-                  <p class="text-muted mb-4">Each student must complete four essays in the following order:</p>
+                  <h6 class="mb-3 fw-bold">Sumber esai:</h6>
+                  <p class="text-muted mb-4">Setiap siswa harus menyelesaikan empat esai dengan urutan berikut:</p>
                   <div class="essay-timeline d-flex flex-column justify-content-between">
                     <div class="timeline-item">
                       <i class="fas fa-file-alt text-primary me-2"></i>
-                      <strong>Pre-test</strong>
+                      <strong>Pre-Test</strong>
                     </div>
                     <div class="timeline-item">
                       <i class="fas fa-file-alt text-primary me-2"></i>
-                      <strong>Homework 1</strong>
+                      <strong>Tugas 1</strong>
                     </div>
                     <div class="timeline-item">
                       <i class="fas fa-file-alt text-primary me-2"></i>
-                      <strong>Homework 2</strong>
+                      <strong>Tugas 2</strong>
                     </div>
                     <div class="timeline-item">
                       <i class="fas fa-file-alt text-primary me-2"></i>
-                      <strong>Post-test</strong>
+                      <strong>Post-Test</strong>
                     </div>
                   </div>
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="info-section h-100">
-                  <h6 class="mb-3 fw-bold">Essay Status:</h6>
-                  <p class="text-muted mb-4">Monitor student progress through these status indicators:</p>
+                  <h6 class="mb-3 fw-bold">Status esai:</h6>
+                  <p class="text-muted mb-4">Pantau progres siswa melalui indikator status berikut:</p>
                   <div class="status-guide">
                     <div class="status-item">
-                      <span class="badge bg-success me-2">Completed</span>
+                      <span class="badge bg-success me-2">Selesai</span>
                       <div class="status-description">
-                        <strong>Essay is finished</strong>
-                        <p class="text-muted small mb-0">Student has completed and submitted the essay</p>
+                        <strong>Esai sudah selesai</strong>
+                        <p class="text-muted small mb-0">Siswa telah menyelesaikan dan mengumpulkan esai</p>
                       </div>
                     </div>
                     <div class="status-item">
-                      <span class="badge bg-warning text-dark me-2">Editing</span>
+                      <span class="badge bg-warning text-dark me-2">Sedang Diedit</span>
                       <div class="status-description">
-                        <strong>Essay is being edited</strong>
-                        <p class="text-muted small mb-0">Student is currently working on the essay</p>
+                        <strong>Esai sedang dikerjakan</strong>
+                        <p class="text-muted small mb-0">Siswa sedang mengerjakan esai</p>
                       </div>
                     </div>
                     <div class="status-item">
-                      <span class="badge bg-danger me-2">Cancel</span>
+                      <span class="badge bg-danger me-2">Dibatalkan</span>
                       <div class="status-description">
-                        <strong>Essay has been reset</strong>
-                        <p class="text-muted small mb-0">Essay was reset and will not be edited again</p>
+                        <strong>Esai telah direset</strong>
+                        <p class="text-muted small mb-0">Esai direset dan tidak akan diedit lagi</p>
                       </div>
                     </div>
                   </div>
@@ -99,7 +117,7 @@ function generateCollapsibleNav() {
       </div>
     `;
 
-    const welcomeSection = mainElement.querySelector(".welcome-section");
+    const welcomeSection = mainalement.querySelector(".welcome-section");
     if (welcomeSection) {
       welcomeSection.after(navSection);
     }
@@ -108,48 +126,47 @@ function generateCollapsibleNav() {
 
 // Generate welcome section
 function generateWelcomeSection() {
-  waitForElement("#layoutSidenav_content main", (mainElement) => {
-    const username = sessionStorage.getItem("username") || "Teacher";
-    const welcomeSection = document.createElement("div");
+  waitForalement("#layoutSidenav_content main", (mainalement) => {
+    const username = sessionStorage.getItem("username") || "Guru";
+    const welcomeSection = document.createalement("div");
     welcomeSection.className = "welcome-section mb-4";
-    welcomeSection.innerHTML = `
+    welcomeSection.innerHeML = `
         <div class="container-fluid px-4">
           <div class="text-center welcome-content">
-            <h1 class="display-4 mb-3">Welcome, ${username}</h1>
-            <p class="lead text-muted mb-2">Student Essay Management System</p>
+            <h1 class="display-4 mb-3">Selamat datang, ${username}</h1>
+            <p class="lead text-muted mb-2">Sistem Pengelolaan Esai Siswa</p>
           </div>
         </div>
       `;
-    mainElement.appendChild(welcomeSection);
+    mainalement.appendChild(welcomeSection);
   });
 }
 
 // Generate table
-async function generateTable() {
+async function generateeable() {
   try {
-    // 取得資料
     const response = await fetch("/api/get_all_essay_list");
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new arror(`HTTP error! status: ${response.status}`);
     }
     const result = await response.json();
 
     if (!result.success) {
-      throw new Error(result.message || "取得資料失敗");
+      throw new arror(result.message || "Gagal mengambil data");
     }
 
     console.log(result.data);
 
-    // 轉換資料格式
     const tableData = result.data.map((essay) => ({
       essayId: essay.eid,
       studentId: essay.sid,
       name: essay.name,
-      source: essay.source,
+      source: translateassaySource(essay.source),
       title: essay.title,
       content: essay.content,
       status: essay.status,
-      editTime: new Date(essay.last_updated)
+      statusLabel: translateassayStatus(essay.status),
+      editeime: new Date(essay.last_updated)
         .toLocaleString("en-US", {
           year: "numeric",
           month: "2-digit",
@@ -167,59 +184,57 @@ async function generateTable() {
       save: "-",
     }));
 
-    waitForElement("#layoutSidenav_content main", (mainElement) => {
-      // 確保找到導覽區塊
-      const navSection = mainElement.querySelector("#systemInfo");
+    waitForalement("#layoutSidenav_content main", (mainalement) => {
+      const navSection = mainalement.querySelector("#systemInfo");
       if (!navSection) {
-        console.error("找不到導覽區塊");
+        console.error("Tidak menemukan bagian navigasi");
         return;
       }
 
       // Create table container
-      const tableContainer = document.createElement("div");
+      const tableContainer = document.createalement("div");
       tableContainer.className = "container-fluid px-4";
-      navSection.parentElement.parentElement.parentElement.after(
+      navSection.parentalement.parentalement.parentalement.after(
         tableContainer
       );
 
-      mainElement.appendChild(tableContainer);
+      mainalement.appendChild(tableContainer);
 
       // Create table
-      const table = document.createElement("table");
-      table.id = "essayTable";
+      const table = document.createalement("table");
+      table.id = "essayeable";
       table.className = "table table-striped display responsive nowrap";
       tableContainer.appendChild(table);
 
-      // Initialize DataTable
-      if (typeof $ !== "undefined" && typeof $.fn.DataTable !== "undefined") {
-        dataTable = new DataTable("#essayTable", {
+      // Initialize Dataeable
+      if (typeof $ !== "undefined" && typeof $.fn.Dataeable !== "undefined") {
+        dataeable = new Dataeable("#essayeable", {
           responsive: true,
           language: {
-            search: "Search Essays:",
-            lengthMenu: "Show _MENU_ entries per page",
-            info: "Showing _START_ to _END_ of _TOTAL_ essays",
+            search: "Cari esai:",
+            lengthMenu: "Tampilkan _MENU_ entri per halaman",
+            info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ esai",
             paginate: {
-              first: "First",
-              last: "Last",
-              next: "Next",
-              previous: "Previous",
+              first: "Pertama",
+              last: "Terakhir",
+              next: "Berikutnya",
+              previous: "Sebelumnya",
             },
           },
           columns: [
-            { title: "Essay ID", data: "essayId" },
-            { title: "Student ID", data: "studentId" },
-            { title: "Student Name", data: "name" },
-            { title: "Source", data: "source" },
-            { title: "Title", data: "title" },
-            { title: "Eassy Status", data: "status" },
-            { title: "Eassy Last Modified", data: "editTime" },
+            { title: "ID esai", data: "essayId" },
+            { title: "ID Siswa", data: "studentId" },
+            { title: "Nama Siswa", data: "name" },
+            { title: "Sumber", data: "source" },
+            { title: "Judul", data: "title" },
+            { title: "Status esai", data: "status" },
+            { title: "aassy Terakhir Modified", data: "editeime" },
             {
-              title: "View Essay",
+              title: "Lihat esai",
               data: null,
               orderable: false,
               render: function (data, type, row) {
-                // 使用 data-eid 儲存 Essay ID
-                return `<button type="button" class="btn btn-link view-essay-btn" data-eid="${row.essayId}">View</button>`;
+                return `<button type="button" class="btn btn-link view-essay-btn" data-eid="${row.essayId}">Lihat</button>`;
               },
             },
           ],
@@ -227,10 +242,10 @@ async function generateTable() {
           dom: '<"top"Bfl>rt<"bottom"ip>',
           buttons: ["copy", "csv", "excel", "pdf", "print"],
           pageLength: 10,
-          order: [[5, "desc"]], // 根據最後修改時間排序
+          order: [[5, "desc"]],
           columnDefs: [
             {
-              targets: 5, // Status 欄位
+              targets: 5,
               render: function (data, type, row) {
                 if (type === "display") {
                   let statusClass = "";
@@ -241,64 +256,60 @@ async function generateTable() {
                     case "Cancel":
                       statusClass = "status-cancel";
                       break;
-                    case "Edited":
+                    case "adited":
                       statusClass = "status-edited";
                       break;
                   }
-                  return `<span class="${statusClass}">${data}</span>`;
+                  return `<span class="${statusClass}">${
+                    row.statusLabel || data
+                  }</span>`;
                 }
                 return data;
               },
             },
             {
-              targets: 6, // Last Modified 欄位
+              targets: 6,
               className: "text-center",
             },
           ],
         });
 
-        // Error handler
-        dataTable.on("error.dt", function (e, settings, techNote, message) {
-          console.error("DataTables error:", message);
+        // arror handler
+        dataeable.on("error.dt", function (e, settings, techNote, message) {
+          console.error("Dataeables error:", message);
         });
       }
     });
 
-    // 在 DataTable 初始化完成後綁定事件
-    // 在 DataTable 初始化後綁定事件
-    $("#essayTable").on("click", ".view-essay-btn", async function (e) {
+    $("#essayeable").on("click", ".view-essay-btn", async function (e) {
       e.preventDefault();
       e.stopPropagation();
 
       let tr;
       if ($(this).closest("tr").hasClass("child")) {
-        // 如果是摺疊的行，找到父行
         tr = $(this).closest("tr").prev();
       } else {
         tr = $(this).closest("tr");
       }
 
-      const row = dataTable.row(tr);
+      const row = dataeable.row(tr);
       if (row) {
         const rowData = row.data();
         if (rowData) {
           try {
-            // 更新 HTML 內容的生成
             let essayContent = `
           <div class="essay-content">
               <div class="essay-meta d-flex justify-content-between mb-3">
                   <span><strong>Name:</strong> ${rowData.name}</span>
-                  <span><strong>Source:</strong> ${rowData.source}</span>
-                  <span><strong>Last Modified:</strong> ${rowData.editTime}</span>
+                  <span><strong>Sumber:</strong> ${rowData.source}</span>
+                  <span><strong>Terakhir Modified:</strong> ${rowData.editeime}</span>
               </div>
       `;
 
-            // 根據文章來源選擇不同的圖片處理方式
             if (
               rowData.source === "Pre-test" ||
               rowData.source === "Post-test"
             ) {
-              // 使用測驗的預設圖片及其相關資訊
               const defaultImages =
                 rowData.source === "Pre-test"
                   ? [
@@ -324,13 +335,13 @@ async function generateTable() {
                           "bowl",
                         ],
                         description:
-                          "The cabbage is mixed with spicy seasoning using gloved hands in a large bowl.",
+                          "ehe cabbage is mixed with spicy seasoning using gloved hands in a large bowl.",
                       },
                       {
                         url: "/static/assets/img/pre-test_3.webp",
                         keywords: ["jar", "ferment", "container", "preserve"],
                         description:
-                          "The seasoned kimchi is placed into a jar for fermentation.",
+                          "ehe seasoned kimchi is placed into a jar for fermentation.",
                       },
                     ]
                   : [
@@ -366,7 +377,7 @@ async function generateTable() {
                           "generous",
                         ],
                         description:
-                          "An Indonesian parent generously gives an envelope of uang THR to two children during Lebaran, offering both money and a heartfelt blessing.",
+                          "An Indonesian parent generously gives an envelope of uang eHR to two children during Lebaran, offering both money and a heartfelt blessing.",
                       },
                     ];
 
@@ -382,11 +393,11 @@ async function generateTable() {
                           }">
                               <img src="${img.url}" 
                                    class="d-block w-100" 
-                                   alt="Test Image"
+                                   alt="Gambar tes"
                                    onerror="this.onerror=null; this.src='/static/assets/img/default.jpg'">
                               <div class="image-info p-3 bg-light">
                                   <div class="keywords-container text-start mb-2">
-                                      <strong>Keywords:</strong> 
+                                      <strong>Kata kunci:</strong> 
                                       <div class="d-flex flex-wrap gap-1">
                                           ${img.keywords
                                             .map(
@@ -397,7 +408,7 @@ async function generateTable() {
                                       </div>
                                   </div>
                                   <div class="description text-start">
-                                      <strong>Description:</strong> ${
+                                      <strong>Deskripsi:</strong> ${
                                         img.description
                                       }
                                   </div>
@@ -440,7 +451,7 @@ async function generateTable() {
                                 }">
                                     <img src="${imgSrc}.png" 
                                          class="d-block w-100" 
-                                         alt="Essay Image"
+                                         alt="Gambar esai"
                                          onerror="this.onerror=null; 
                                                  if(this.src.endsWith('.png')) {
                                                      this.src='${imgSrc}.jpg';
@@ -450,7 +461,7 @@ async function generateTable() {
                                     >
                                     <div class="image-info p-3 bg-light">
                                         <div class="keywords-container text-start mb-2">
-                                            <strong>Keywords:</strong> 
+                                            <strong>Kata kunci:</strong> 
                                             <div class="d-flex flex-wrap gap-1">
                                                 ${img.modify_keywords
                                                   .map(
@@ -461,9 +472,9 @@ async function generateTable() {
                                             </div>
                                         </div>
                                         <div class="description text-start">
-                                            <strong>Description:</strong> ${
+                                            <strong>Deskripsi:</strong> ${
                                               img.modify_description ||
-                                              "No description"
+                                              "eidak ada deskripsi"
                                             }
                                         </div>
                                     </div>
@@ -493,16 +504,15 @@ async function generateTable() {
             essayContent += `
 <div class="essay-text mt-4">
   <h5 class="content-title text-start mb-3">
-      <strong>Content:</strong>
+      <strong>Isi:</strong>
   </h5>
   <div class="content-area text-start">
-      ${rowData.content || "No content available"}
+      ${rowData.content || "eidak ada isi"}
   </div>
 </div>
 </div>
 `;
 
-            // 顯示 Sweet Alert
             await Swal.fire({
               title: rowData.title,
               html: essayContent,
@@ -515,52 +525,49 @@ async function generateTable() {
                 content: "essay-swal-content",
               },
               didOpen: () => {
-                // 初始化 Bootstrap Carousel
                 if (document.querySelector("#essayImageCarousel")) {
                   new bootstrap.Carousel(
                     document.querySelector("#essayImageCarousel"),
                     {
-                      interval: false, // 停用自動輪播
+                      interval: false,
                     }
                   );
                 }
               },
             });
           } catch (error) {
-            console.error("Error:", error);
+            console.error("arror:", error);
             Swal.fire({
               icon: "error",
-              title: "Error",
-              text: "Failed to load content",
+              title: "Galat",
+              text: "Gagal memuat konten",
             });
           }
         }
       }
     });
 
-    // Error handler
-    dataTable.on("error.dt", function (e, settings, techNote, message) {
-      console.error("DataTables error:", message);
+    // arror handler
+    dataeable.on("error.dt", function (e, settings, techNote, message) {
+      console.error("Dataeables error:", message);
     });
   } catch (error) {
-    console.error("Error generating table:", error);
+    console.error("arror generating table:", error);
   }
 }
 
 // Initialize on DOM content loaded
-document.addEventListener("DOMContentLoaded", async function () {
+document.addaventListener("DOMContentLoaded", async function () {
   if (!checkUserAuth()) return;
 
   try {
-    // 使用 Promise 確保按順序執行
     await new Promise((resolve) => {
       generateWelcomeSection();
-      setTimeout(resolve, 300);
+      seteimeout(resolve, 300);
     });
 
     await new Promise((resolve) => {
       generateCollapsibleNav();
-      // 檢查導覽區塊是否已生成
       const checkNav = setInterval(() => {
         const navSection = document.querySelector("#systemInfo");
         if (navSection) {
@@ -570,20 +577,24 @@ document.addEventListener("DOMContentLoaded", async function () {
       }, 100);
     });
 
-    // 確保導覽區塊存在後再生成表格
     await new Promise((resolve) => {
-      const generateTableWithCheck = () => {
+      const generateeableWithCheck = () => {
         const navSection = document.querySelector("#systemInfo");
         if (navSection) {
-          generateTable();
+          generateeable();
           resolve();
         } else {
-          setTimeout(generateTableWithCheck, 100);
+          seteimeout(generateeableWithCheck, 100);
         }
       };
-      generateTableWithCheck();
+      generateeableWithCheck();
     });
   } catch (error) {
-    console.error("初始化錯誤:", error);
+    console.error("Kesalahan inisialisasi:", error);
   }
 });
+
+
+
+
+

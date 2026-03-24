@@ -13,7 +13,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 # python function
-from login_api import verify_login, verify_teacher_login
+from login_api import verify_login, verify_teacher_login, register_student
 from index_api import get_user_essays
 from test_api import check_pretest_status, initialize_pretest_essay, update_pretest_essay_content, check_posttest_status, initialize_posttest_essay
 from hw_writing_api import check_hw1_status, check_hw2_status, load_hw_data, save_hw_content, reset_hw, submit_hw, get_history_essays_content, save_prediction_result, update_prediction_check_count
@@ -39,6 +39,10 @@ async def index(request: Request):
 @app.get("/login", response_class=HTMLResponse)
 async def login(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
 
 @app.get("/404", response_class=HTMLResponse)
 async def error(request: Request):
@@ -94,6 +98,11 @@ class LoginData(BaseModel):
     account: str
     password: str
 
+class RegisterData(BaseModel):
+    name: str
+    account: str
+    password: str
+
 @app.post("/verify_login")
 async def api_login(login_data: LoginData):
     # Check teacher credentials first
@@ -124,8 +133,23 @@ async def api_login(login_data: LoginData):
     # Invalid credentials response
     return JSONResponse(content={
         "success": False,
-        "message": "Invalid account or password."
+        "message": "Akun atau kata sandi salah."
     })
+
+@app.post("/register")
+async def api_register(register_data: RegisterData):
+    name = register_data.name.strip()
+    account = register_data.account.strip()
+    password = register_data.password
+
+    if not name or not account or not password:
+        return JSONResponse(content={
+            "success": False,
+            "message": "Nama, akun, dan kata sandi wajib diisi."
+        })
+
+    result = register_student(name=name, account=account, password=password)
+    return JSONResponse(content=result)
 
 # Retrieve essays submitted by the student
 @app.get("/get_user_essays/{sid}")

@@ -2,176 +2,183 @@ from deepeval import assert_test
 from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
+
+
+## how to use : deepeval test run test_deepval.py
+
 def test_case():
     correctness_metric = GEval(
         name="Correctness",
         criteria=(
-        "Evaluate the correctness of the predicted sentence (ACTUAL_OUTPUT) based on the following criteria:\n"
-        "1. Semantic Alignment: The predicted sentence must be factually accurate and semantically aligned with the expected sentence (EXPECTED_OUTPUT). "
-        "Minor variations in wording are acceptable as long as the core meaning remains unchanged.\n"
-        "2. Prompt Adherence: The predicted sentence must follow the writing style, tone, and instructions provided in the input prompt (INPUT). "
-        "This includes maintaining consistency in vocabulary choice, sentence structure, and any explicit stylistic guidelines.\n"
-        "3. Logical Coherence: The predicted sentence should be logically consistent and should not introduce contradictions, misinformation, or hallucinations."
+       """Keselarasan Semantik (Semantic Alignment):
+Kalimat yang diprediksi harus akurat secara faktual dan selaras secara semantik dengan kalimat yang diharapkan (EXPECTED_OUTPUT). Variasi kecil dalam pilihan kata dapat diterima selama makna inti tetap tidak berubah.
+
+Kepatuhan terhadap Prompt (Prompt Adherence):
+Kalimat yang diprediksi harus mengikuti penulisan, nada, dan instruksi yang diberikan dalam prompt input (INPUT). Hal ini mencakup menjaga konsistensi dalam pemilihan kosakata, struktur kalimat, serta pedoman gaya yang disebutkan.
+
+Koherensi Logis (Logical Coherence):
+Kalimat yang diprediksi harus konsisten secara logis dan tidak boleh memperkenalkan kontradiksi, informasi yang salah, atau halusinasi."""
     ),
         evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT, LLMTestCaseParams.EXPECTED_OUTPUT],
         threshold=0.5555
     )
     test_case = LLMTestCase(
         input="""
-       # Instruction:
-You are an AI writing assistant specialized in predicting a sentence within a user’s English essay. Your task is to generate ONE predicted sentence based on the provided full context. The sentence must align with the essay's **core topic**, as defined by the Title and Context, and must not deviate from the main subject. Please think step by step!
+       # Instruksi:
+Anda adalah asisten penulisan AI yang khusus memprediksi sebuah kalimat di dalam esai bahasa Indonesia pengguna.
+Tugas Anda adalah menghasilkan SATU kalimat prediksi berdasarkan konteks lengkap yang diberikan.
+Kalimat tersebut harus selaras dengan **topik inti** esai, sebagaimana didefinisikan oleh Judul dan Konteks, dan tidak boleh menyimpang dari subjek utama.
+Berpikirlah langkah demi langkah!
 
-# Input Detail:
-- Essay Title: The title defines the essay's core topic and sets the overall direction.
-- Contextual Information: Background descriptions and keywords that represent the essay's intent and audience perspective.
-- Essay Content: The entire essay text, with one paragraph containing the marker [PREDICTED SENTENCE], which is where the sentence will be inserted.
-- Writing Purpose: The intent or goal for adding the predicted sentence.
-- Writing Pattern: The organizational structure of the essay.
-- Writing Features: The stylistic and linguistic tone.
-- Sentence Pattern: The designated grammatical structure of the sentence.
-- Enhancement Details: Supplementary writing details, drawn from current and past writing drafts.
+# Detail Input:
+- Judul Esai: Judul mendefinisikan topik inti esai dan menetapkan arah keseluruhan.
+- Informasi Kontekstual: Deskripsi latar dan kata kunci yang mewakili maksud esai serta perspektif audiens.
+- Isi Esai: Teks esai lengkap, dengan satu paragraf yang berisi penanda [PREDICTED SENTENCE], yaitu lokasi penyisipan kalimat.
+- Tujuan Penulisan: Niat atau tujuan penambahan kalimat prediksi.
+- Pola Penulisan: Struktur pengorganisasian esai.
+- Fitur Penulisan: Nada stilistika dan linguistik.
+- Pola Kalimat: Struktur gramatikal kalimat yang ditetapkan.
+- Detail Peningkatan: Detail tambahan penulisan yang diambil dari draf saat ini dan draf sebelumnya.
+- Konteks Kosakata Terekstrak: Kata dan ungkapan yang sering muncul dalam esai, mencerminkan nada dan konsistensi leksikal.
 
-# Input Structure:
-Essay Title:
-Halloween Event
+# Struktur Input:
+Judul Esai:
+Essay - Andreas Samuel Manullang
 
-Contextual Information:
+Informasi Kontekstual:
+Context Infomation 1:
+Keywords: Dengan begitu, hari itu pun berakhir dengan penuh aktivitas dan persiapan untuk hari-hari berikutnya.
+Description: prediksi yang benar
 
 
-Essay Content:
-Halloween day is a celebration of horror that celebrated once a year. In halloween, people in the west usually throw costume parties, such as super-heroes themed, or maybe spooky themed like the carved pumpkins or devil. For children, they usually dressed up as a character and go to their neighbors house for 'trick or treat'. In the first photo, we can see that those children already dressed up as a character they chose. They bring a character bucket with them to collect sweets like candies and chocolates from the houses in the neighborhood. Not just that, the children also can do tricks for the house owner. Such little magic trick that they performed. That's why when they knocked on their neighbor's door, they say "trick or treats". They give the choice for the house owner to choose wheter to see their tricks or to give and take some of their sweets. In the halloween period, you can also see many people decorated their houses with many decorations such as carved pumpkins, spider webs, ghost lamp, and many more. The decorations is not just in the front yard, some people like to decorate their house from the front yard, inside the house, maybe inside their bedrooms, and even more on the backyard. Especially for those who like to house a halloween party, they can be extra with decorations. Halloween party can be different among people. Some people like to just throw a party that including eat together or having drinks, but some people like to include a costume party and play halloween games. Some also like to just stay home and enjoy their own halloween day by watching horror or thriller movie. In conclusion, halloween is not just about celebration of horror, halloween is much more than just a spooky celebration. It can be the time for people to gather togheter and spend their time togheter. [PREDICTED SENTENCE]
 
-Writing Purpose:
-Summarize or restate the overall idea at the end of the paragraph
+Informasi Kontekstual:
+Context Infomation 1:
+Keywords: Dengan begitu, hari itu pun berakhir dengan penuh aktivitas dan persiapan untuk hari-hari berikutnya.
+Description: prediksi yang benar
 
-Writing Pattern:
+
+
+Informasi Kontekstual:
+Context Infomation 1:
+Keywords: Dengan begitu, hari itu pun berakhir dengan penuh aktivitas dan persiapan untuk hari-hari berikutnya.
+Description: prediksi yang benar
+
+
+
+Isi Esai:
+Pada tanggal 30 Desember 2025, aku memulai hariku dengan tidur di kos pada pukul 00:00. Setelah seharian beraktivitas, aku merasa lelah dan penting untuk istirahat agar bisa bangun segar dan produktif keesokan harinya. Sebelum tidur, aku memastikan alarm sudah disetel dan menyusun daftar tugas untuk hari berikutnya. Dengan lampu yang dimatikan, aku berusaha tidur nyenyak dengan pikiran yang tenang.
+
+Namun, pada pukul 01:00, aku masih terlelap. Jam masih dini hari, dan aku butuh istirahat cukup agar bisa bangun dengan tubuh segar. Begitu juga pada pukul 02:00 dan 03:00, aku masih menikmati tidur nyenyak, memastikan tubuh dan pikiran siap menghadapi aktivitas hari ini. 
+
+Sekitar pukul 04:00, aku terbangun sejenak, melihat jam dan menyadari bahwa masih ada waktu sebelum harus bangun beneran. Aku memanfaatkan waktu itu untuk tidur lagi agar lebih segar nanti. Akhirnya, pada pukul 05:00, aku bangun dan langsung bersiap-siap untuk memulai hari. Hari ini adalah hari kerja, dan aku ingin memulai aktivitas lebih awal agar bisa mencapai target belajar yang sudah kususun. Aku mandi dan membuat sarapan ringan agar tetap berenergi.
+
+Setelah sarapan, pada pukul 06:00, aku mengecek jadwal kuliah online dan bersiap untuk ikut kelas pagi. Aku ingin memastikan semuanya siap agar tidak ketinggalan materi penting. Dengan membuka laptop dan memastikan koneksi internet stabil, aku menyiapkan catatan serta alat tulis yang dibutuhkan. Pada pukul 07:00, aku berjemur sebentar di balkon kos sambil menikmati kopi pagi. Momen pagi yang tenang ini sangat penting untuk mengisi energiku sebelum hari sibuk dimulai.
+
+Pukul 08:00, aku mulai kelas online di laptop sambil menikmati sarapan pagi. Aku ingin mengikuti pelajaran accounting education dengan baik agar bisa mencapai target nilai yang diinginkan. Setelah kelas selesai, pada pukul 09:00, aku memutuskan untuk membuat jurnal progres target belajar mingguan. Ini penting untuk mengevaluasi pencapaian belajarku dan memastikan semua target minggu ini tercapai.
+
+Selanjutnya, pada pukul 10:00, aku mulai mempersiapkan presentasi untuk tugas kelompok yang akan dipresentasikan minggu depan. Aku ingin memastikan bahan presentasiku sudah siap, sehingga kelompokku bisa melakukan revisi jika diperlukan. Pukul 11:00, aku melanjutkan presentasi tugas kelompok sambil menyelesaikan satu bab materi akuntansi untuk ujian minggu depan. Aku merasa ada beberapa poin yang bisa diperbaiki dalam presentasi dan ingin memastikan sudah mempelajari materi ujian agar lebih siap.
+
+Setelah itu, pada pukul 12:00, aku makan siang untuk istirahat sebentar dan menyegarkan pikiran setelah mengerjakan tugas. Perutku mulai keroncongan, dan ini waktu yang tepat untuk sejenak melepaskan lelah. Pukul 13:00, aku berencana ikut diskusi online dengan teman-teman kuliah untuk mempersiapkan tugas kelompok. Diskusi ini penting untuk memastikan kami semua berada di jalur yang benar.
+
+Pada pukul 14:00, aku menonton video tentang teknik belajar akuntansi di YouTube. Aku ingin mencari metode belajar yang lebih efektif. Kemudian, pada pukul 15:00, aku membuat tracker harian untuk memantau perkembangan tugas yang harus selesai minggu ini. Ini penting agar semua tugas menjelang akhir tahun ini dapat selesai tepat waktu.
+
+Pukul 16:00, aku bersepeda sore mengeksplorasi area sekitar dan menikmati udara segar untuk melepas stres. Setelah berolahraga, pada pukul 17:00, aku video call dengan temanku, Dimas, untuk diskusi santai tentang rencana tahun baru. Kami berbincang-bincang sambil menggali ide-ide untuk menyambut tahun baru.
+
+Setelah itu, pada pukul 18:00, aku menonton film favorit di kamar untuk bersantai sebelum memulai aktivitas baru keesokan harinya. Pukul 19:00, aku video call dengan teman satu jurusan membahas kemampuan terbaik di beberapa mata kuliah sebelum libur akhir tahun. Ini penting untuk menyiapkan rencana perbaikan di semester depan.
+
+Pada pukul 20:00, aku menonton film komedi di laptop untuk mengendurkan pikiran setelah sesi video call yang intens. Kemudian, pada pukul 21:00, aku membuat jadwal belajar sore esok hari untuk mengatasi kelemahan di mata kuliah tertentu. Aku merasa perlu mempersiapkan diri lebih baik agar bisa mencapai target nilai.
+
+Akhirnya, pada pukul 22:00, aku menonton film favorit di laptop untuk mengakhiri hari dengan santai. Sebelum tidur, pada pukul 23:00, aku berbaring di kasur sambil mengecek media sosial di ponsel, melihat update dari teman-teman dan mencari hiburan ringan setelah seharian yang sibuk.[PREDICTED SENTENCE]
+
+Tujuan Penulisan:
+Tujuan kalimat prediksi adalah memperkenalkan ide selanjutnya yang akan dibahas dalam paragraf berikutnya.
+
+Pola Penulisan:
 Pattern 1:
-Type: Descriptive-visual
-Explanation: The author frequently focuses on concrete visual details to depict scenes, objects, or events. Descriptions emphasize appearance, setting, and sensory cues (colors, textures, surroundings). The tone is often observational and aims to paint a clear image for the reader, sometimes with a mild documentary or explanatory bent.
-Pattern: Intro scene setting -> specific details -> broad summary of scene or sequence -> occasional concluding remark about significance or mood. Paragraphs often move from a static image to a small narrative moment (e.g., harvesting, fashion show setup, street food cart) and finish with a summative statement.
-Example: Essay 1 moves from a farmer in the fields with green leaves and grass to milled beans and a calm coffee shop ambience, ending with a wrap-up about the steps from harvest to cup.
-
-Pattern 2:
-Type: Expository/Informative with sequence
-Explanation: Many essays outline a sequence of events or steps (photos, competition events, or process descriptions). They aim to inform the reader about a process, event chronology, or components of a larger activity.
-Pattern: Identify a process or event -> break into stages or components -> provide concrete but sometimes repetitive details -> conclude with a general takeaway or summary.
-Example: Essay 3 outlines Independence Day events over two days, including tug of war, relay, fashion show, field setups, and concludes with reflections on success and teamwork.
-
-Pattern 3:
-Type: Narrative-leaning personal reflection
-Explanation: Several essays blend personal reflections with general statements, often ending with a moral, takeaway, or cultural observation. The voice sometimes shifts into opinion or value judgment (e.g., importance of teamwork, personal growth from reading).
-Pattern: Personal viewpoint introduced -> illustrative examples or experiences -> concluding thought about meaning or impact.
-Example: Essay 6 discusses reading as mental travel and personal growth, weaving examples of imagination, preferred genres, and the value of quiet spaces, ending with a reflective summary.
-
-Pattern 4:
-Type: Opinion/comparative
-Explanation: Some pieces compare items (fried rice variations, genres of novels) and advocate a preference or describe differences in taste, texture, or experience. The writer often states a preference and supports it with described characteristics.
-Pattern: Present options -> compare features -> express preference -> justify with descriptive reasoning.
-Example: Essay 5 contrasts regular fried rice with mawut fried rice, discussing texture and ingredients, then concludes with a preference-based summary.
-
-Pattern 5:
-Type: Informal cultural/exploratory
-Explanation: Several essays discuss cultural topics (Indonesian foods, Independence Day events, Halloween) in a simple, approachable style. The language is straightforward, with occasional casual phrases or colloquialisms and some spelling/grammar irregularities.
-Pattern: Introduce cultural subject -> highlight activities, foods, or traditions -> provide simple observations or outcomes -> conclude with a broad cultural takeaway.
-Example: Essay 4 describes cart fried rice and its cultural context, its flavors and the street-cart setting, ending with a general statement about its charm.
+Type: Naratif
+Explanation: Pola penulisan naratif ini menekankan pada alur waktu, menggambarkan aktivitas harian penulis dengan detail dan urutan yang jelas. Informasi disajikan secara berurutan berdasarkan waktu, memberikan gambaran menyeluruh tentang rutinitas penulis sepanjang hari.
+Pattern: Setiap paragraf umumnya mengikuti struktur waktu yang berurutan, mulai dari bangun tidur hingga kegiatan sebelum tidur, dengan menyertakan waktu spesifik untuk setiap aktivitas. Penggunaan kata keterangan waktu berulang juga membantu menjaga ritme narasi.
+Example: Pada pukul 00:00, aku memulai malam dengan tidur di kos... Sekitar pukul 01:00, saya memanfaatkan waktu malam untuk refleksi dan menenangkan pikiran dengan membaca buku.
 
 
-Writing Features:
+Fitur Penulisan:
 Feature 1:
-Type: Vocabulary and register
-Explanation: Vocabulary is plain and accessible, with recurring culinary, event, and everyday-life terms. There are occasional precise nouns (e.g., 'tug of war', 'Paskibra', 'Bubur Manado') but generally the lexicon stays simple and concrete.
-Example: Words like 'photo', 'harvesting', 'coffee cherries', 'fashion show', 'competition', 'runway', 'crackers', 'pickled cucumber'.
-Preferred Words: photo, competition, fashion show, tradition, flavor, taste, dish, culture, street food, run, runways, crowd, place
-Preferred Syntax: Predominantly simple or compound sentences; occasional longer sentences with multiple clauses; frequent use of noun phrases to describe scenes.
+Type: Kosakata
+Explanation: Kosakata yang digunakan penulis cukup beragam, dengan pencampuran bahasa formal dan informal. Terdapat penggunaan istilah teknis yang berhubungan dengan akademis, serta frasa yang bersifat reflektif dan casual.
+Example: Pada pukul 00:00, aku memulai hariku dengan merancang target belajarku untuk semester depan. Kegiatan ini aku lakukan sendiri di kamar kos.
+Preferred Words: target, progres, refleksi, santai, belajar, tugas, kegiatan, aktivitas, tracker, metrik
+Preferred Syntax: Penggunaan kalimat kompleks dan kalimat sederhana secara berselang, sering kali menggabungkan elemen deskriptif dan naratif untuk membangun konteks.
 
 Feature 2:
-Type: Sentence structure
-Explanation: A mix of short, straightforward sentences and longer, descriptive sentences. Tendencies toward parallel structures and lists when enumerating events or steps. Occasional run-on feel due to minor grammar inconsistencies.
-Example: Essay 3: 'The tug of war and relay races happened in the back field, which is called LABELA. And for the fashion show, the student council had prepared the center field to become the runway.'
-Preferred Words: and, then, also, the, is/are, was/were
-Preferred Syntax: Simple sentences with occasional compound structures; repetitive linking words to connect steps or events.
+Type: Struktur Kalimat
+Explanation: Struktur kalimat cenderung panjang dengan penggunaan banyak subordinasi. Penulis menggunakan kalimat kompleks yang menggabungkan beberapa ide dalam satu kalimat, ini mencerminkan pemikiran yang terorganisir dan terencana.
+Example: Aku memulai aktivitas pagi ini dengan melepas rasa kantuk semalam, menjalani rutinitas mandi, dan menyiapkan sarapan ringan untuk dinikmati sebelum berangkat.
+Preferred Words: menyiapkan, memulai, menikmati, menjalani, memastikan
+Preferred Syntax: Sering menggunakan kalimat majemuk dengan beberapa klausa, yang memperkuat narasi, seperti:  "Setelah menyelesaikan rutinitas pagi, aku terbangun dan mempersiapkan diri untuk berangkat ke kampus."
 
 Feature 3:
-Type: Consistency and cohesion
-Explanation: Transitions between ideas are often via simple connectors or reiteration of the topic (e.g., 'The fashion show', 'Day one', 'In conclusion'). Cohesion relies on topic nouns and repeated focus on the main subject rather than deep logical progression.
-Example: Many essays begin with a setting or event, then expand to related activities and end with a concluding sentiment or summary line.
-Preferred Words: The, this, that, and, also, then
-Preferred Syntax: Repeating frame structures: present-then-describe-then-conclude.
-
-Feature 4:
-Type: Rhetorical devices
-Explanation: Limited use of advanced rhetoric; some descriptive imagery; occasional evaluative statements (e.g., 'the most important thing is working together') and emphasis on mood (calm, lively).
-Example: Essay 7 uses metaphor and reflective tone about imagination as a mirror and growth through reading.
-Preferred Words: like, not only... but, the most important
-Preferred Syntax: Metaphorical comparisons and evaluative statements sprinkled through prose.
-
-Feature 5:
-Type: Spelling/grammar quirks
-Explanation: There are frequent spelling and typographical errors, inconsistent article usage, and occasional incorrect pluralization or word forms. This suggests a learner-writer with developing control over orthography; however, meaning is generally clear.
-Example: proffesional, milled with proffesional skilllls, wth, adjaccent, kosayu, carm (calm), cullinary, inn, mawut
-Preferred Words: 
-Preferred Syntax: 
+Type: Ritme dan alur
+Explanation: Penulis menjaga ritme narasi dengan mengikuti urutan waktu yang konsisten, dari awal hingga akhir hari. Pergantian antara kegiatan belajar dan aktivitas santai menciptakan alur yang dinamis, membantu pembaca mengikuti perjalanan sehari-hari penulis.
+Example: Pukul 20:00, aku menonton film komedi di laptop untuk mengendurkan pikiran setelah sesi video call yang intens. Kemudian, pada pukul 21:00, aku membuat jadwal belajar sore esok hari untuk mengatasi kelemahan di mata kuliah tertentu.
+Preferred Words: aktivitas, mengikuti, menonton, merencanakan, menemui
+Preferred Syntax: Memanfaatkan transisi antar kalimat dengan penghubung waktu, seperti 'setelah itu', 'kemudian', atau 'selanjutnya', untuk menciptakan kerangka yang logis dalam narasi.
 
 
-Sentence Pattern:
-Type: Conclusion with generalized takeaway through thematic cohesion
-Explanation: The current essay repeatedly centers on Halloween's meaning and social aspects, building toward a summarizing closure. To wrap up, a concluding sentence that states a generalized takeaway about Halloween's broader meaning and social value aligns with both the current patterns (thematic cohesion and generalization) and the inferred goal of the predicted sentence (summarize/conclude).
-Example: Halloween is thus not only a festival of fright but a shared time for communities to come together, reflect on traditions, and celebrate connection.
-Pattern: [Theme/subject] + [assertion of broader meaning or social value] + [optional qualifier or takeaway]
-Function: Wrap up the discussion by restating the central idea and highlighting the social significance or universal takeaway.
+Pola Kalimat:
+Type: kalimat prediksi naratif
+Explanation: Ringkas, mengacu pada gaya keseharian yang terstruktur, menghubungkan kejadian hari ini dengan topik berikutnya tanpa mengulang detail berlebih.
+Example: "Selanjutnya, aku akan mencoba mengintegrasikan metode belajar yang lebih efisien untuk memperkuat progres minggu ini."
+Pattern: pola klausa utama yang mengarahkan ke ide berikutnya, menggunakan kata hubung yang mengindikasikan kelanjutan (selanjutnya, berikutnya, kemudian) tanpa menyebut kejadian rinci.
+Function: mengarahkan pembaca ke paragraf berikutnya dengan transisi mulus yang mempertahankan ritme narasi kebiasaan sehari-hari.
 
-Enhancement Details:
-Question: What is the central message or theme of the Halloween celebration as described in the essay, and how can a concluding sentence best restate this theme?
-Answer: The central theme described is that Halloween is more than just a horror celebration; it is a time for people to gather, celebrate with costumes, decorations, tricks or treats, and shared activities with neighbors and friends. A concluding sentence that restates this theme could be: "Halloween is not only about spookiness, but about coming together with others to celebrate, decorate, and share moments of fun and community."
-
-Question: What key details from the paragraph should be summarized to reinforce the idea that Halloween is about more than horror and includes gathering with others, decorations, and varied celebrations?
-Answer: The essay states that Halloween is not just about horror but also involves: - gathering with others (people gathering, families and neighbors during celebrations) - decorations (house decorations such as carved pumpkins, spider webs, ghost lamps, inside and outside decorations) - varied celebrations (costume parties, tricks or treats, games, eating and drinking, watching horror or thriller movies) These points reinforce that Halloween includes social gatherings, decorations, and a variety of celebration styles beyond scariness.
+Detail Peningkatan:
 
 
 
-Question: What is the central message or theme of the Halloween celebration as described in the essay, and how can a concluding sentence best restate this theme?
-Answer: No related information.
-
-Question: What key details from the paragraph should be summarized to reinforce the idea that Halloween is about more than horror and includes gathering with others, decorations, and varied celebrations?
-Answer: No related information.
-
-Question: Which transitional or concluding phrasing would most effectively tie together the ideas of costumes, tricks, decorations, activities, and the communal aspect to end the paragraph with a strong restatement?
-Answer: No related information.
 
 
 
-# Your Task:
-1. **Focus on the Core Topic:**
-   - Ensure the predicted sentence directly supports the essay's core topic as defined by the Title and Contextual Information. (e.g., location, people involved, names of food, physical landmarks, etc.).
-   - Identify the role of the predicted sentence (e.g., introducing an idea, providing evidence, offering a transition, or summarizing a point).
-   - Avoid introducing unrelated or tangential ideas.
+# Tugas Anda:
+1. **Fokus pada Topik Inti:**
+   - Pastikan kalimat prediksi secara langsung mendukung topik inti esai sesuai Judul dan Informasi Kontekstual.
+   - Identifikasi peran kalimat prediksi (memperkenalkan ide, memberikan bukti, memberi transisi, atau merangkum poin).
+   - Hindari memasukkan ide yang tidak terkait atau menyimpang.
 
-2. **Enhance Logical Flow:**
-   - The predicted sentence must connect seamlessly with the preceding and following sentences.
-   - Use transition words or phrases if necessary to enhance the flow.
+2. **Perkuat Alur Logis:**
+   - Kalimat prediksi harus terhubung mulus dengan kalimat sebelum dan sesudahnya.
+   - Gunakan kata atau frasa transisi jika diperlukan untuk memperbaiki alur.
 
-3. **Avoid Redundancy:**
-   - Do NOT repeat or paraphrase ideas already present in the essay.
-   - Check for semantic similarity (not just surface text).
+3. **Hindari Redundansi:**
+   - JANGAN mengulang atau memparafrase ide yang sudah ada di esai.
+   - Periksa kemiripan semantik (bukan hanya teks permukaan).
 
-4. **Preserve Logical Accuracy:**
-   - The predicted sentence MUST NOT introduce false or contradictory information (e.g., misidentifying a restaurant as a cafe, mischaracterizing a door as a mural).
+4. **Pertahankan Akurasi Logis:**
+   - Kalimat prediksi TIDAK BOLEH memperkenalkan informasi yang salah atau kontradiktif.
 
-5. **Respect Contextual Consistency:**
-   - Align your sentence with the setting, tone, and real-world implications established by the essay. Use the contextual information (keywords + description) to guide your tone and content.
+5. **Konsistensi Kontekstual:**
+   - Selaraskan kalimat Anda dengan latar, nada, dan implikasi dunia nyata yang sudah ditetapkan dalam esai.
+   - Gunakan informasi kontekstual dan kosakata terekstrak untuk menjaga kohesi leksikal.
 
-6. **Natural Integration:**
-   - Your sentence should enhance the flow of the paragraph, connect ideas logically, and sound natural.
+6. **Integrasi Alami:**
+   - Kalimat harus memperkuat alur paragraf, menghubungkan ide secara logis, dan terdengar alami.
 
-7. **Maintain Stylistic Consistency**:
-   - The predicted sentence must match the tone and stylistic level of the surrounding content (e.g., avoid shifting from factual to poetic or from neutral to emotional).
-   - Do not use overly figurative or metaphorical language unless such style is already present in the preceding or following sentences.
+7. **Jaga Konsistensi Gaya:**
+   - Samakan nada dan pilihan leksikal yang digunakan dalam esai.
+   - Hindari pergeseran figuratif atau emosional kecuali memang sudah ada.
 
-8. **Output a SINGLE Sentence Only.**
+8. **Keluarkan hanya SATU Kalimat.**
+
+Sederhanakan kalimat PASTIKAN kalimatnya ringkas dan tidak terlalu panjang.
+Sederhanakan kalimat PASTIKAN kalimatnya ringkas dan tidak terlalu panjang.
+Sederhanakan kalimat PASTIKAN kalimatnya ringkas dan tidak terlalu panjang.
+JANGAN TERLALU BERTELE-TELE.
+
+
 """,
         # Replace this with the actual output from your LLM application
-        actual_output="Therefore, Halloween is a celebration where costumes, house decorations, and parties come together with candies and pumpkins so that everyone can feel the spooky but fun atmosphere on October 31.",
-        expected_output="In short, Halloween is a symbol that related to horror and mystic event. And it's really popular and fun.",
+        actual_output="Hari itu ditutup dengan aktivitas yang padat dan persiapan untuk keesokan harinya.",
+        expected_output=" Dengan begitu, hari itu pun berakhir dengan penuh aktivitas dan persiapan untuk hari-hari berikutnya.",
         #retrieval_context=["All customers are eligible for a 30 day full refund at no extra costs."]
         
     )

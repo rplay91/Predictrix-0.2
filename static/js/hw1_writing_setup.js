@@ -11,35 +11,33 @@ const CONFIG = {
 // Error messages
 const ERROR_MESSAGES = {
   fileType: {
-    title: "Invalid File Type",
-    text: "Please upload JPG, PNG or WEBP files only",
+    title: "Jenis File Tidak Valid",
+    text: "Silakan unggah file JPG, PNG, atau WEBP saja",
   },
   maxImages: {
-    title: "Maximum Limit Reached",
-    text: "You can upload up to 3 images only",
+    title: "Batas Maksimum Tercapai",
+    text: "Anda hanya dapat mengunggah hingga 3 gambar",
   },
   emptyTitle: {
-    title: "Title Required",
-    text: "Please enter an Essay topic",
+    title: "Judul Wajib Diisi",
+    text: "Silakan masukkan topik esai",
   },
   noImage: {
-    title: "No Image",
-    text: "Please upload at least one image",
+    title: "Belum Ada Gambar",
+    text: "Silakan unggah setidaknya satu gambar",
   },
   unanalyzedImage: {
-    title: "Incomplete Analysis",
-    text: "Please ensure all uploaded images are analyzed",
+    title: "Analisis Belum Lengkap",
+    text: "Pastikan semua gambar yang diunggah sudah dianalisis",
   },
 };
 
 // Initialize page when DOM is loaded
 document.addEventListener("DOMContentLoaded", function () {
-  // 檢查是否從正確頁面進入
   const referrer = document.referrer;
   const expectedPath = "/hw1_writing";
 
   if (!referrer.endsWith(expectedPath)) {
-    // 重新導向到寫作頁面
     window.location.href = "/hw1_writing";
     return;
   }
@@ -59,67 +57,67 @@ document.addEventListener("DOMContentLoaded", function () {
         <div class="setup-container">
           <div class="setup-content">
             <div class="page-header">
-              <h1 class="google-style-heading">Homework 1: A memorable food that impressed you.</h1>
-              <h2 class="google-style-subheading">Writing Preparation</h2>
+              <h1 class="google-style-heading">Tugas 1: Makanan berkesan yang membuat Anda terkesan.</h1>
+              <h2 class="google-style-subheading">Persiapan Menulis</h2>
             </div>
 
             <!-- 作業說明 -->
             <div class="setup-instructions">
               <div class="instruction-content">
-                <p class="instruction-intro"><b>Please share a food that left a deep impression on you. You can describe its taste, appearance, and smell, as well as where and with whom you ate it. You can also explain why this dish was special and memorable to you.</b></p>
-                <p class="instruction-intro">Follow these steps to prepare your essay:</p>
+                <p class="instruction-intro"><b>Ceritakan makanan yang meninggalkan kesan mendalam bagi Anda. Anda dapat menjelaskan rasa, tampilan, dan aromanya, serta di mana dan dengan siapa Anda menikmatinya. Anda juga dapat menjelaskan mengapa hidangan ini begitu istimewa dan berkesan bagi Anda.</b></p>
+                <p class="instruction-intro">Ikuti langkah-langkah berikut untuk menyiapkan esai Anda:</p>
                 <ol class="instruction-list">
                   <li>
                     <span class="step-number">1</span>
-                    <span class="step-text">Enter an essay title that according to the homework topic.</span>
+                    <span class="step-text">Masukkan judul esai yang sesuai dengan topik tugas.</span>
                   </li>
                   <li>
                     <span class="step-number">2</span>
-                    <span class="step-text">Upload up to 3 images that will be used as references
+                    <span class="step-text">Unggah hingga 3 gambar yang akan digunakan sebagai referensi
                       <ul>
-                        <li>The allowed image formats for upload are ".jpg", ".png", and ".webp".</li>
+                        <li>Format gambar yang diperbolehkan untuk diunggah adalah ".jpg", ".png", dan ".webp".</li>
                       </ul>
                     </span>                      
                   </li>
                   <li>
                     <span class="step-number">3</span>
-                    <span class="step-text">For each image:
+                    <span class="step-text">Untuk setiap gambar:
                       <ul>
-                        <li>Click "Analyze Image" to generate AI-powered keywords and descriptions</li>
-                        <li>Review and modify the generated keywords and descriptions if needed</li>
+                        <li>Klik "Analisis Gambar" untuk menghasilkan kata kunci dan deskripsi dengan bantuan AI</li>
+                        <li>Tinjau dan ubah kata kunci serta deskripsi yang dihasilkan bila diperlukan</li>
                       </ul>
                     </span>
                   </li>
                   <li>
                     <span class="step-number">4</span>
-                    <span class="step-text">Click "Start" when you're ready to begin writing your essay</span>
+                    <span class="step-text">Klik "Mulai" saat Anda siap mulai menulis esai</span>
                   </li>
                 </ol>
               </div>
             </div>
             
             <div class="setup-section">
-              <label class="google-label">Essay Title</label>
+              <label class="google-label">Judul Esai</label>
               <input type="text" class="google-input" id="EssayTitle" 
-                     placeholder="Enter Essay title" required>
+                     placeholder="Masukkan judul esai" required>
             </div>
       
             <div class="setup-section">
-              <label class="google-label">Image Upload (Max ${CONFIG.MAX_IMAGES})</label>
+              <label class="google-label">Unggah Gambar (Maks. ${CONFIG.MAX_IMAGES})</label>
               <div id="imageUploadContainer"></div>
               <button class="google-button secondary" id="addImageBtn" 
                       onclick="addImageUploadBlock()">
-                <i class="fas fa-plus"></i> Add Image
+                <i class="fas fa-plus"></i> Tambah Gambar
               </button>
             </div>
       
             <div class="setup-actions">
               <button class="google-button secondary" onclick="window.history.back()">
-                Back
+                Kembali
               </button>
               <button class="google-button primary" id="nextButton" 
                       onclick="validateAndProceed()">
-                Start
+                Mulai
               </button>
             </div>
           </div>
@@ -172,14 +170,14 @@ function addImageUploadBlock() {
       <div class="upload-area" id="uploadArea_${imageCount}">
         <div class="upload-placeholder">
           <i class="fas fa-cloud-upload-alt"></i>
-          <p>Drag and drop image here or click to upload</p>
+          <p>Seret dan lepaskan gambar di sini atau klik untuk mengunggah</p>
         </div>
         <input type="file" id="imageUpload_${imageCount}" accept="image/*" hidden>
       </div>
       <button class="delete-upload-area" 
               id="cancelUpload_${imageCount}"
               onclick="removeUploadArea('${blockId}')">
-        <i class="fas fa-times"></i> Cancel Upload
+        <i class="fas fa-times"></i> Batalkan Unggah
       </button>
     </div>
 
@@ -189,7 +187,7 @@ function addImageUploadBlock() {
           <img id="imagePreview_${imageCount}" src="" alt="Preview">
           <button class="google-button danger remove-image" 
                   onclick="removeImage('${blockId}')">
-            <i class="fas fa-trash"></i> Delete Image
+            <i class="fas fa-trash"></i> Hapus Gambar
           </button>
         </div>
         
@@ -197,32 +195,32 @@ function addImageUploadBlock() {
           <button class="google-button primary analyze-btn" 
                   id="analyzeBtn_${imageCount}" 
                   onclick="analyzeImage(${imageCount})">
-            <i class="fas fa-magic"></i> Analyze Image
+            <i class="fas fa-magic"></i> Analisis Gambar
           </button>
           
           <div class="analysis-results" id="analysisResults_${imageCount}" 
                style="display: none;">
             <div class="keywords-section">
-              <label class="google-label">Image Keywords</label>
+              <label class="google-label">Kata Kunci Gambar</label>
               <div class="keywords-chips" id="keywordsChips_${imageCount}"></div>
               <div class="keyword-input-group">
                 <input type="text" class="google-input" 
                        id="keywordInput_${imageCount}" 
-                       placeholder="Enter keyword">
+                       placeholder="Masukkan kata kunci">
                 <button class="google-button primary add-keyword-btn" 
                         onclick="addKeywordFromInput(${imageCount})">
-                  <i class="fas fa-plus"></i> Add
+                  <i class="fas fa-plus"></i> Tambah
                 </button>
               </div>
             </div>
             
             <div class="description-section">
-              <label class="google-label">Image Description</label>
+              <label class="google-label">Deskripsi Gambar</label>
               <textarea class="google-input description" 
                         id="imageDescription_${imageCount}"></textarea>
               <button class="google-button secondary regenerate-btn" 
                       onclick="regenerateAnalysis(${imageCount})">
-                <i class="fas fa-sync-alt"></i> Regenerate
+                <i class="fas fa-sync-alt"></i> Buat Ulang
               </button>
             </div>
           </div>
@@ -265,7 +263,7 @@ function initializeImageBlock(index) {
     }
   });
 
-  // Click upload handlers
+  // Handler klik unggah
   uploadArea.addEventListener("click", () => {
     imageUpload.click();
   });
@@ -279,7 +277,6 @@ function initializeImageBlock(index) {
 
   // Keyword input handler
   if (keywordInput) {
-    // Enter 鍵新增關鍵字
     keywordInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -287,7 +284,6 @@ function initializeImageBlock(index) {
       }
     });
 
-    // Add 按鈕新增關鍵字
     const addKeywordBtn = keywordInput.nextElementSibling;
     if (addKeywordBtn) {
       addKeywordBtn.addEventListener("click", (e) => {
@@ -304,7 +300,6 @@ function addKeywordFromInput(index) {
   const keyword = input.value.trim();
 
   if (keyword) {
-    // 檢查是否已存在相同的關鍵字
     const existingKeywords = Array.from(
       document
         .getElementById(`keywordsChips_${index}`)
@@ -313,12 +308,11 @@ function addKeywordFromInput(index) {
 
     if (!existingKeywords.includes(keyword)) {
       addKeywordChip(keyword, index);
-      input.value = ""; // 清空輸入框
+      input.value = "";
     } else {
-      // 如果關鍵字已存在，顯示提示
       Swal.fire({
-        title: "Duplicate Keyword",
-        text: "This keyword already exists",
+        title: "Kata Kunci Duplikat",
+        text: "Kata kunci ini sudah ada",
         icon: "warning",
         timer: 1500,
         showConfirmButton: false,
@@ -336,12 +330,10 @@ function handleImageUpload(file, index) {
       const previewImg = document.getElementById(`imagePreview_${index}`);
       const imageInput = document.getElementById(`imageUpload_${index}`);
 
-      // 設置 input 的檔案
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
       imageInput.files = dataTransfer.files;
 
-      // 計算等比例縮放尺寸
       const containerWidth = CONFIG.IMAGE_CONTAINER_SIZE;
       const containerHeight = CONFIG.IMAGE_CONTAINER_SIZE;
       let width = img.width;
@@ -352,12 +344,10 @@ function handleImageUpload(file, index) {
       width *= ratio;
       height *= ratio;
 
-      // 設置圖片尺寸
       previewImg.style.width = `${width}px`;
       previewImg.style.height = `${height}px`;
       previewImg.src = e.target.result;
 
-      // 顯示預覽區域
       document.getElementById(`uploadArea_${index}`).style.display = "none";
       document.getElementById(`cancelUpload_${index}`).style.display = "none";
       document.getElementById(`previewSection_${index}`).style.display =
@@ -375,10 +365,9 @@ async function analyzeImage(index) {
     const file = imageInput.files[0];
     if (!file) return;
 
-    // 顯示載入中
     Swal.fire({
-      title: "Analyzing Image",
-      text: "Please wait...",
+      title: "Sedang menganalisis gambar",
+      text: "Mohon tunggu...",
       allowOutsideClick: false,
       didOpen: () => {
         Swal.showLoading();
@@ -393,46 +382,39 @@ async function analyzeImage(index) {
       body: formData,
     });
 
-    // 新增：檢視原始回應
     // console.log("API Raw Response:", await response.clone().text());
 
     const result = await response.json();
 
-    // 新增：檢視解析後的資料
     // console.log("API Parsed Result:", result);
     // console.log("Keywords:", result.data?.keywords);
     // console.log("Description:", result.data?.description);
 
     if (!result.success) {
-      throw new Error(result.error || "Analysis failed");
+      throw new Error(result.error || "Analisis gagal");
     }
 
-    // 驗證回傳的資料格式
     if (
       !result.data ||
       !Array.isArray(result.data.keywords) ||
       typeof result.data.description !== "string"
     ) {
-      throw new Error("Invalid response format");
+      throw new Error("Format respons tidak valid");
     }
 
-    // 儲存原始分析結果
     const keywordsContainer = document.getElementById(`keywordsChips_${index}`);
     const descriptionInput = document.getElementById(
       `imageDescription_${index}`
     );
 
-    // 將原始資料存入 dataset
     keywordsContainer.dataset.originalKeywords = JSON.stringify(
       result.data.keywords
     );
     descriptionInput.dataset.originalDescription = result.data.description;
 
-    // 更新 UI 顯示
     const analyzeBtn = document.getElementById(`analyzeBtn_${index}`);
     const analysisResults = document.getElementById(`analysisResults_${index}`);
 
-    // 更新關鍵字和描述
     analyzeBtn.style.display = "none";
     analysisResults.style.display = "block";
 
@@ -440,7 +422,6 @@ async function analyzeImage(index) {
       analysisResults.classList.add("show");
     }, 100);
 
-    // 更新 UI
     result.data.keywords.forEach((keyword) => addKeywordChip(keyword, index));
     descriptionInput.value = result.data.description;
 
@@ -448,7 +429,7 @@ async function analyzeImage(index) {
   } catch (error) {
     // console.error("Analysis error:", error);
     Swal.fire({
-      title: "Error",
+      title: "Galat",
       text: error.message,
       icon: "error",
     });
@@ -460,29 +441,23 @@ function updateImageAnalysis(index, data) {
   const descriptionInput = document.getElementById(`imageDescription_${index}`);
   const analysisResults = document.getElementById(`analysisResults_${index}`);
 
-  // 儲存原始分析結果到元素的 dataset 中
   keywordsContainer.dataset.originalKeywords = JSON.stringify(data.keywords);
   descriptionInput.dataset.originalDescription = data.description;
 
-  // 清空現有的關鍵字
   keywordsContainer.innerHTML = "";
 
-  // 顯示關鍵字
   data.keywords.forEach((keyword) => {
     if (keyword && typeof keyword === "string") {
       addKeywordChip(keyword.trim(), index);
     }
   });
 
-  // 顯示描述文字
   if (data.description && typeof data.description === "string") {
     descriptionInput.value = data.description.trim();
   }
 
-  // 顯示分析結果區域
   analysisResults.style.display = "block";
 
-  // 隱藏分析按鈕
   const analyzeBtn = document.getElementById(`analyzeBtn_${index}`);
   if (analyzeBtn) {
     analyzeBtn.style.display = "none";
@@ -500,7 +475,7 @@ function addKeywordChip(keyword, index) {
   document.getElementById(`keywordsChips_${index}`).appendChild(chip);
 }
 
-// Regenerate analysis
+// Buat Ulang analysis
 async function regenerateAnalysis(index) {
   const analysisResults = document.getElementById(`analysisResults_${index}`);
   document.getElementById(`keywordsChips_${index}`).innerHTML = "";
@@ -525,7 +500,6 @@ function removeImage(blockId) {
 
 // Validate and proceed
 async function validateAndProceed() {
-  // 基本驗證
   const title = document.getElementById("EssayTitle").value.trim();
   if (!title) {
     await Swal.fire({
@@ -535,7 +509,6 @@ async function validateAndProceed() {
     return;
   }
 
-  // 圖片驗證
   const imageBlocks = document.querySelectorAll(".image-block");
   if (imageBlocks.length === 0) {
     await Swal.fire({
@@ -545,7 +518,6 @@ async function validateAndProceed() {
     return;
   }
 
-  // 檢查未分析的圖片
   if (
     [...imageBlocks].some(
       (block) => block.querySelector(".analyze-btn")?.style.display !== "none"
@@ -558,7 +530,6 @@ async function validateAndProceed() {
     return;
   }
 
-  // 收集資料
   const setupData = {
     title,
     images: [...imageBlocks].map((block, index) => ({
@@ -572,15 +543,14 @@ async function validateAndProceed() {
     })),
   };
 
-  // 顯示確認對話框
   const result = await Swal.fire({
-    title: "Ready to Start Your Homework?",
+    title: "Siap Memulai Tugas Anda?",
     html: `
       <div class="confirmation-dialog">
         <p class="confirmation-message">
-          Please confirm that your <b>Title, Uploaded Images, and Analyzed Context Information</b> are correct.
+          Pastikan <b>Judul, Gambar yang Diunggah, dan Informasi Konteks Hasil Analisis</b> sudah benar.
           <br><br>
-          Click "Start" when you're ready to begin.
+          Klik "Mulai" saat Anda siap mulai.
         </p>
         <div class="confirm-button-wrapper">
           <div class="countdown-overlay"></div>
@@ -589,8 +559,8 @@ async function validateAndProceed() {
     `,
     icon: "info",
     showCancelButton: true,
-    confirmButtonText: "Start",
-    cancelButtonText: "Go Back",
+    confirmButtonText: "Mulai",
+    cancelButtonText: "Kembali",
     confirmButtonColor: "#1a73e8",
     cancelButtonColor: "#dc3545",
     allowOutsideClick: false,
@@ -610,15 +580,14 @@ async function validateAndProceed() {
     try {
       // Show loading state
       Swal.fire({
-        title: "Initializing",
-        text: "Setting up your homework...",
+        title: "Menyiapkan",
+        text: "Sedang menyiapkan tugas Anda...",
         allowOutsideClick: false,
         didOpen: () => {
           Swal.showLoading();
         },
       });
 
-      // 準備要傳送的資料
       const setupInfo = {
         sid: sessionStorage.getItem("sid"),
         title: document.getElementById("EssayTitle").value.trim(),
@@ -632,31 +601,28 @@ async function validateAndProceed() {
               `imageDescription_${index}`
             );
 
-            // 取得原始分析結果
             const originalKeywords = JSON.parse(
               keywordsContainer.dataset.originalKeywords || "[]"
             );
             const originalDescription =
               descriptionInput.dataset.originalDescription || "";
 
-            // 取得目前修改後的結果
             const currentKeywords = Array.from(
               keywordsContainer.getElementsByClassName("keyword-chip")
             ).map((el) => el.textContent.trim().replace("×", ""));
             const currentDescription = descriptionInput.value;
 
             return {
-              file_data: imgElement.src, // base64 圖片資料
-              keywords: originalKeywords, // 原始分析關鍵字
-              description: originalDescription, // 原始分析描述
-              modify_keywords: currentKeywords, // 使用者修改後的關鍵字
-              modify_description: currentDescription, // 使用者修改後的描述
+              file_data: imgElement.src,
+              keywords: originalKeywords,
+              description: originalDescription,
+              modify_keywords: currentKeywords,
+              modify_description: currentDescription,
             };
           })
         ),
       };
 
-      // console.log("Sending data:", setupInfo); // 新增除錯用
 
       // Call initialize homework API
       const response = await fetch("/initialize_homework1", {
@@ -677,7 +643,7 @@ async function validateAndProceed() {
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || "Failed to initialize homework");
+        throw new Error(data.error || "Gagal menyiapkan tugas");
       }
 
       // Save setup data with essay ID
@@ -691,10 +657,15 @@ async function validateAndProceed() {
       // console.error("Initialization failed:", error);
       await Swal.fire({
         icon: "error",
-        title: "Initialization Failed",
+        title: "Inisialisasi Gagal",
         text: error.message,
         confirmButtonColor: "#dc3545",
       });
     }
   }
 }
+
+
+
+
+

@@ -137,3 +137,64 @@ def verify_teacher_login(account: str, password: str) -> Dict[str, Union[bool, s
     finally:
         if 'connection' in locals():
             connection.close()
+
+
+def register_student(name: str, account: str, password: str) -> Dict[str, Union[bool, str]]:
+    """
+    Register a new student account.
+
+    Args:
+        name: Display name of the student
+        account: Login account
+        password: Login password
+
+    Returns:
+        Dict: registration result
+        {
+            "success": bool,
+            "message": str
+        }
+    """
+    try:
+        connection = pymysql.connect(
+            host=DB_CONFIG['host'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password'],
+            db=DB_CONFIG['db'],
+            charset=DB_CONFIG['charset'],
+            cursorclass=pymysql.cursors.DictCursor
+        )
+
+        with connection.cursor() as cursor:
+            check_sql = "SELECT sid FROM students WHERE account = %s LIMIT 1"
+            cursor.execute(check_sql, (account,))
+            existing_user = cursor.fetchone()
+
+            if existing_user:
+                return {
+                    "success": False,
+                    "message": "Account already exists. Please use another account."
+                }
+
+            insert_sql = """
+                INSERT INTO students (name, account, password)
+                VALUES (%s, %s, %s)
+            """
+            cursor.execute(insert_sql, (name, account, password))
+            connection.commit()
+
+            return {
+                "success": True,
+                "message": "Registration successful. Please login."
+            }
+
+    except Exception as e:
+        print(f"Registration error: {str(e)}")
+        return {
+            "success": False,
+            "message": "Server error occurred"
+        }
+
+    finally:
+        if 'connection' in locals():
+            connection.close()

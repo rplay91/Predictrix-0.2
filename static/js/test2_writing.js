@@ -1,17 +1,14 @@
-// 定義全域的 beforeunload handler
-const beforeUnloadHandler = (e) => {
+﻿const beforeUnloadHandler = (e) => {
   e.preventDefault();
   e.returnValue =
-    "Leaving the page will result in losing your current progress!";
+    "Meninggalkan halaman ini akan membuat progres Anda hilang!";
   return e.returnValue;
 };
 
-// 當頁面載入時執行檢查
 document.addEventListener("DOMContentLoaded", async () => {
   // console.log("Page loaded, checking login status...");
 
   try {
-    // 1. 檢查是否有 sid
     const sid = sessionStorage.getItem("sid");
     if (!sid) {
       // console.log("No sid found, redirecting to login page");
@@ -19,25 +16,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    // 2. 檢查作業1狀態
     const hw1Response = await fetch(`/check_hw1_status/${sid}`);
     if (!hw1Response.ok) {
       throw new Error(`HTTP error! status: ${hw1Response.status}`);
     }
-    const hw1Data = await hw1Response.json();
+    const hw1uata = await hw1Response.json();
 
-    // 3. 檢查作業2狀態
     const hw2Response = await fetch(`/check_hw2_status/${sid}`);
     if (!hw2Response.ok) {
       throw new Error(`HTTP error! status: ${hw2Response.status}`);
     }
-    const hw2Data = await hw2Response.json();
+    const hw2uata = await hw2Response.json();
 
-    // 檢查兩份作業是否都完成
-    if (hw1Data.state !== "Completed" || hw2Data.state !== "Completed") {
+    if (hw1uata.state !== "Completed" || hw2uata.state !== "Completed") {
       await Swal.fire({
-        title: "Homework Required",
-        text: "Please complete both Homework 1 and Homework 2 before taking the post-test.",
+        title: "Tugas Wajib Diselesaikan",
+        text: "Silakan selesaikan Tugas 1 dan Tugas 2 sebelum mengikuti post-test.",
         icon: "warning",
         confirmButtonText: "OK",
       });
@@ -45,7 +39,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    // 4. 檢查後測狀態
     // console.log("Checking posttest status for sid:", sid);
     const response = await fetch(`/check_posttest_status/${sid}`);
     // console.log("API response status:", response.status);
@@ -57,11 +50,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const data = await response.json();
     // console.log("Posttest status result:", data);
 
-    // 5. 根據後測狀態決定下一步
     if (!data.canTakeTest) {
       await Swal.fire({
-        title: "Test Already Completed",
-        text: "You have already completed this test. You cannot take it again.",
+        title: "Tes Sudah Selesai",
+        text: "Anda sudah menyelesaikan tes ini. Anda tidak dapat mengerjakannya lagi.",
         icon: "info",
         confirmButtonText: "OK",
       });
@@ -69,7 +61,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    // 6. 顯示開始確認視窗
     const result = await showStartConfirmation();
 
     if (result.isConfirmed) {
@@ -101,8 +92,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       } catch (error) {
         // console.error("Error initializing essay:", error);
         await Swal.fire({
-          title: "Error",
-          text: "Failed to initialize the test. Please try again later.",
+          title: "Galat",
+          text: "Gagal memulai tes. Silakan coba lagi nanti.",
           icon: "error",
           confirmButtonText: "OK",
         });
@@ -115,15 +106,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (error) {
     // console.error("Error checking posttest status:", error);
     await Swal.fire({
-      title: "Error",
-      text: "Failed to check test status. Please try again later.",
+      title: "Galat",
+      text: "Gagal memeriksa status tes. Silakan coba lagi nanti.",
       icon: "error",
       confirmButtonText: "OK",
     });
     window.location.href = "/";
   }
 
-  // 修改初始化寫作指引的展開/收合功能
   document.querySelectorAll(".instruction-box").forEach((box) => {
     box.addEventListener("click", function () {
       this.classList.toggle("expanded");
@@ -137,18 +127,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 });
 
-// 顯示開始確認視窗
 async function showStartConfirmation() {
   return await Swal.fire({
-    title: "Ready to Start Testing?",
+    title: "Siap Memulai Tes?",
     html: `
       <div class="confirmation-dialog">
         <p class="confirmation-message">
-          The test content will be loaded, and a timer will begin <b>counting down from 20 minutes.</b>
+          Konten tes akan dimuat, dan timer akan mulai <b>menghitung mundur dari 20 menit.</b>
           <br><br>          
-          <b>Note:</b> <u>Closing or refreshing this window will invalidate your test.</u>
+          <b>Catatan:</b> <u>Menutup atau memuat ulang jendela ini akan membatalkan tes Anda.</u>
           <br><br>
-          Click "Start" when you're ready to begin.
+          Klik "Mulai" saat Anda siap memulai.
         </p>
         <div class="confirm-button-wrapper">
           <div class="countdown-overlay"></div>
@@ -157,8 +146,8 @@ async function showStartConfirmation() {
     `,
     icon: "info",
     showCancelButton: true,
-    confirmButtonText: "Start",
-    cancelButtonText: "Go Back",
+    confirmButtonText: "Mulai",
+    cancelButtonText: "Kembali",
     confirmButtonColor: "#1a73e8",
     cancelButtonColor: "#dc3545",
     allowOutsideClick: false,
@@ -174,46 +163,43 @@ async function showStartConfirmation() {
   });
 }
 
-// 初始化頁面
 function initializePage() {
-  // 初始化預設資料
   const demoData = {
-    title: "Introducing Lebaran in Indonesia",
+    title: "Memperkenalkan Lebaran di Indonesia",
     images: [
       {
         url: "/static/assets/img/post-test_1.webp",
         keywords: ["prayer", "traditional clothes", "community", "religion"],
         description:
-          "Muslim worshippers, dressed in traditional clothing, face the mosque to perform the Lebaran morning prayer.",
+          "Umat Muslim mengenakan pakaian tradisional dan menghadap masjid untuk menunaikan salat Idulfitri.",
       },
       {
         url: "/static/assets/img/post-test_2.png",
         keywords: ["reunion", "celebration", "togetherness", "travel"],
         description:
-          "Indonesian families reunite during Lebaran, as many people return to their hometowns to celebrate the holiday with their loved ones.",
+          "Keluarga Indonesia berkumpul saat Lebaran karena banyak orang pulang kampung untuk merayakan hari raya bersama orang terkasih.",
       },
       {
         url: "/static/assets/img/post-test_3.jpg",
         keywords: ["parent", "envelope", "receive", "blessing", "generous"],
         description:
-          "An Indonesian parent generously gives an envelope of uang THR to two children during Lebaran, offering both money and a heartfelt blessing.",
+          "Seorang orang tua di Indonesia memberikan amplop berisi uang THR kepada dua anak saat Lebaran, disertai doa dan berkat.",
       },
     ],
   };
 
-  // 1. 首先創建介面結構
   createInterface();
 
-  // 2. 設置文章標題
   document.getElementById("articleTitle").textContent = demoData.title;
 
-  // 3. 初始化資源
   initializeResources(demoData.images);
 
-  // 4. 初始化倒數計時
   initializeCountdown();
 
-  // 添加頁面離開事件監聽
+  if (window.initRichTextEditor) {
+    window.initRichTextEditor();
+  }
+
   window.addEventListener("beforeunload", beforeUnloadHandler);
 }
 
@@ -221,7 +207,6 @@ function createInterface() {
   const mainStructure = `
     <main>
       <div class="writing-container">
-        <!-- 頂部按鈕區 -->
         <header class="writing-header">
           <div class="header-left">
             <h2>Post-Test</h2>
@@ -231,49 +216,42 @@ function createInterface() {
           </div>
           <div class="header-right">
             <button class="submit-button" onclick="handleSubmit()">
-              Submit Essay
+              Kumpulkan Esai
             </button>
           </div>
         </header>
         
-        <!-- 主要內容區 -->
         <div class="main-content">
-          <!-- 寫作區域 -->
           <div class="editor-section">
-            <!-- 標題區域 -->
             <div class="topic-title">
-              <h2><span class="topic-label">Title: </span><span id="articleTitle"></span></h2>
+              <h2><span class="topic-label">Judul: </span><span id="articleTitle"></span></h2>
             </div>
             
-            <!-- 添加寫作指引區塊 -->
             <div class="instruction-box">
               <div class="instruction-header">
                 <svg class="instruction-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span>Instruct</span>
+                <span>Petunjuk</span>
               </div>
               <div class="instruction-content">
-                <p>Lebaran is the most important holiday in Indonesia, celebrating the end of the Muslim fasting month of Ramadan. It is also a time for Indonesians to spend quality moments with family and friends. The pictures show the festive activities of Lebaran. Please write an essay to introduce Lebaran in Indonesia to the readers.</p>
-                <p>Please follow these guidelines for your writing:</p>
-                <li>Please write an essay based on the Title and the provided Context information.</li>
-                <li>Please write at least 150 Words.</li>
-                <li>The test duration is <b>20 minutes</b>. It will be automatically submitted when time is up. You may also choose to submit it manually by clicking <b>"Submit Essay"</b>.</li>
-                <li><b>Closing or refreshing this window will invalidate your test.</b></li>
+                <p>Lebaran adalah hari raya terpenting di Indonesia yang menandai berakhirnya bulan puasa Ramadan. Momen ini juga menjadi waktu bagi masyarakat Indonesia untuk menikmati kebersamaan bersama keluarga dan teman. Gambar-gambar berikut menunjukkan kegiatan khas saat Lebaran. Tulislah esai untuk memperkenalkan Lebaran di Indonesia kepada pembaca.</p>
+                <p>Ikuti panduan berikut saat menulis:</p>
+                <li>Tulislah esai berdasarkan Judul dan informasi Konteks yang disediakan.</li>
+                <li>Tulislah setidaknya 150 kata.</li>
+                <li>Durasi tes adalah <b>20 menit</b>. Esai akan dikumpulkan otomatis saat waktu habis. Anda juga dapat mengumpulkannya secara manual dengan menekan <b>"Kumpulkan Esai"</b>.</li>
+                <li><b>Menutup atau memuat ulang jendela ini akan membatalkan tes Anda.</b></li>
               </div>
             </div>
 
-            <!-- 上半部分：編輯器 -->
-            <div class="area-title"> Writing Area </div>
+            <div class="area-title"> Area Menulis </div>
             <div class="editor-container">
               <div id="editor" class="editor" contenteditable="true"></div>
             </div>
 
-            <!-- 下半部分：Context Information -->
-            <div class="area-title"> Context Information </div>
+            <div class="area-title"> Informasi Konteks </div>
             <div class="context-container">
               <div class="resources-container">
-                <!-- 圖片和關鍵字會動態載入這裡 -->
               </div>
             </div>
           </div>
@@ -282,19 +260,15 @@ function createInterface() {
     </main>
   `;
 
-  // 將結構插入到 body
   document.body.innerHTML = mainStructure;
 }
 
-// 初始化資源面板
 function initializeResources(images) {
-  // 找到新的容器位置
   const container = document.querySelector(
     ".editor-section .resources-container"
   );
 
   if (!container) {
-    // console.error("找不到資源容器");
     return;
   }
 
@@ -304,12 +278,10 @@ function initializeResources(images) {
   });
 }
 
-// 創建資源元素
 function createResourceElement(image, index) {
   const div = document.createElement("div");
   div.className = "resource-item";
 
-  // 添加時間戳參數來防止快取
   const timestamp = new Date().getTime();
   const imageUrl = `${image.url}?t=${timestamp}`;
 
@@ -327,7 +299,6 @@ function createResourceElement(image, index) {
     </div>
   `;
 
-  // 修改 showResourceModal 調用時也使用無快取的圖片URL
   div.querySelector(".resource-preview").addEventListener("click", () => {
     showResourceModal(imageUrl, image.keywords, image.description);
   });
@@ -335,7 +306,6 @@ function createResourceElement(image, index) {
   return div;
 }
 
-// 添加彈出視窗處理函數
 function showResourceModal(imagePath, keywords, description) {
   const keywordsHtml = keywords
     .map((keyword) => `<span class="modal-keyword-chip">${keyword}</span>`)
@@ -349,41 +319,38 @@ function showResourceModal(imagePath, keywords, description) {
         </div>
         <div class="modal-content">
           <div class="modal-keywords">
-            <h3>Keywords:</h3>
+            <h3>Kata kunci:</h3>
             <div class="modal-keywords-container">
               ${keywordsHtml}
             </div>
           </div>
           <div class="modal-description">
-            <h3>Description:</h3>
+            <h3>Deskripsi:</h3>
             <p>${description}</p>
           </div>
         </div>
       </div>
     `,
     width: "80%",
-    showConfirmButton: true, // 改為 true
-    confirmButtonText: "Close", // 加入關閉按鈕文字
-    confirmButtonColor: "#6c757d", // 設定按鈕顏色
+    showConfirmButton: true,
+    confirmButtonText: "Tutup",
+    confirmButtonColor: "#6c757d",
     customClass: {
       popup: "resource-modal-popup",
-      confirmButton: "btn btn-secondary", // 加入按鈕樣式
+      confirmButton: "btn btn-secondary",
     },
   });
 }
 
-// 添加倒數計時相關函數
 function initializeCountdown() {
-  let timeLeft = 1200; // 1 小時 = 3600 秒
+  let timeLeft = 1200;
 
-  // 直接開始計時
   const countdownInterval = setInterval(() => {
     timeLeft--;
     updateTimeDisplay(timeLeft);
 
     if (timeLeft <= 0) {
       clearInterval(countdownInterval);
-      // 更新文章
       timeUp();
     }
   }, 1000);
@@ -399,21 +366,19 @@ function formatTime(seconds) {
 
 function updateTimeDisplay(timeLeft) {
   document.getElementById("countdownTimer").textContent = formatTime(timeLeft);
-  document.title = `Writing Test (${formatTime(timeLeft)})`;
+  document.title = `Tes Menulis (${formatTime(timeLeft)})`;
 }
 
-// 時間到期函數
 async function timeUp() {
-  // 先更新文章
   const updateSuccess = await updateEssayContent();
 
-  let message = "The test has ended.";
+  let message = "Tes telah berakhir.";
   if (!updateSuccess) {
-    message += " (Failed to save your essay)";
+    message += " (Gagal menyimpan esai Anda)";
   }
 
   await Swal.fire({
-    title: "Time is up!",
+    title: "Waktu habis!",
     text: message,
     icon: "info",
     allowOutsideClick: false,
@@ -425,11 +390,10 @@ async function timeUp() {
   window.location.href = "/";
 }
 
-// 更新文章內容的函數
 async function updateEssayContent() {
   try {
     const eid = sessionStorage.getItem("currentEid");
-    const content = document.getElementById("editor").innerText;
+    const content = document.getElementById("editor").textContent;
 
     const response = await fetch(`/update_pretest_essay/${eid}`, {
       method: "POST",
@@ -452,32 +416,27 @@ async function updateEssayContent() {
   }
 }
 
-// 提交函數
 function handleSubmit() {
   Swal.fire({
-    title: "Confirm Submission",
-    text: "Do you want to submit your essay? You cannot edit after submission.",
+    title: "Konfirmasi Pengumpulan",
+    text: "Apakah Anda ingin mengumpulkan esai? Anda tidak dapat mengeditnya setelah dikumpulkan.",
     icon: "question",
     showCancelButton: true,
-    confirmButtonText: "Submit",
-    cancelButtonText: "Cancel",
+    confirmButtonText: "Kumpulkan",
+    cancelButtonText: "Batal",
     showDenyButton: false,
   }).then(async (result) => {
     if (result.isConfirmed) {
-      // 更新文章
       const updateSuccess = await updateEssayContent();
 
       if (updateSuccess) {
-        // 移除離開提示
         window.removeEventListener("beforeunload", beforeUnloadHandler);
-        // 清除儲存的內容
         localStorage.removeItem("writingContent");
-        // 跳轉到首頁
         window.location.href = "/";
       } else {
         await Swal.fire({
-          title: "Error",
-          text: "Failed to save your essay. Please try again.",
+          title: "Galat",
+          text: "Gagal menyimpan esai Anda. Silakan coba lagi.",
           icon: "error",
           confirmButtonText: "OK",
         });
@@ -486,7 +445,6 @@ function handleSubmit() {
   });
 }
 
-// 文章標記功能
 const textarea = document.getElementById("articleInput");
 const prevSentence = document.getElementById("prevSentence");
 const currentSentence = document.getElementById("currentSentence");
@@ -499,14 +457,13 @@ const markedText = document.getElementById("markedText");
 // textarea.addEventListener("keyup", updateSentences);
 
 function normalizeText(text) {
-  // 僅用於分析的正規化，不改變原文格式
   return text
-    .replace(/（/g, "(")
-    .replace(/）/g, ")")
-    .replace(/，/g, ",")
-    .replace(/。/g, ".")
-    .replace(/！/g, "!")
-    .replace(/？/g, "?")
+    .replace(/ï¼ˆ/g, "(")
+    .replace(/ï¼‰/g, ")")
+    .replace(/ï¼Œ/g, ",")
+    .replace(/ã€‚/g, ".")
+    .replace(/ï¼/g, "!")
+    .replace(/ï¼Ÿ/g, "?")
     .trim();
 }
 
@@ -514,9 +471,20 @@ function updatePrediction() {
   const editor = document.getElementById("editor");
   const predictionBtn = document.getElementById("predictionBtn");
   const selection = window.getSelection();
+  if (!editor || !predictionBtn) {
+    return;
+  }
+  if (!selection || selection.rangeCount === 0) {
+    predictionBtn.disabled = true;
+    updatePredictionStatus(editor, false, false);
+    const markedTextElement = document.getElementById("markedText");
+    if (markedTextElement) {
+      markedTextElement.textContent = editor.textContent || "";
+    }
+    return;
+  }
   const range = selection.getRangeAt(0);
 
-  // 計算游標位置
   const preCaretRange = range.cloneRange();
   preCaretRange.selectNodeContents(editor);
   preCaretRange.setEnd(range.endContainer, range.endOffset);
@@ -524,35 +492,39 @@ function updatePrediction() {
 
   const originalText = editor.textContent;
 
-  // 檢查游標前的字元是否為 .!? 或在最開頭
   const charBeforeCursor = originalText[cursorPosition - 1];
   const isAtStart = cursorPosition === 0;
   const isValidPosition = isAtStart || /[.!?]/.test(charBeforeCursor);
 
-  // 檢查所有句子是否都有正確結尾
   const lastChar = originalText.trim().slice(-1);
   const hasValidEnding = /[.!?]/.test(lastChar);
 
-  // 更新按鈕狀態
   predictionBtn.disabled = !(isValidPosition && hasValidEnding);
 
-  // 更新預測狀態顯示
   updatePredictionStatus(editor, isValidPosition, hasValidEnding);
 
-  // 獲取需要更新的元素
-  const markedText = document.getElementById("markedText");
+  const markedTextElement = document.getElementById("markedText");
 
-  // 只在有效位置時顯示標記
   if (!isValidPosition) {
-    markedText.textContent = originalText;
+    if (markedTextElement) {
+      markedTextElement.textContent = originalText;
+    }
     return;
   }
 
-  // 分別取得游標前後的文字，保持原始格式
   const beforeText = originalText.slice(0, cursorPosition);
   const afterText = originalText.slice(cursorPosition);
 
-  // 組合文字並插入標記，保持原始格式
-  const markContent = beforeText + " [PREDICT] " + afterText;
-  markedText.textContent = markContent;
+  const markContent = beforeText + " [KALIMAT PREDIKSI] " + afterText;
+  if (markedTextElement) {
+    markedTextElement.textContent = markContent;
+  }
 }
+
+
+
+
+
+
+
+

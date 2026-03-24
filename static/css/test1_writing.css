@@ -142,11 +142,10 @@ body {
 .editor-container {
   flex: 1.5;
   margin: 20px;
-  padding: 20px;
-  border-radius: 8px;
-  background-color: white;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05),
-    0 4px 8px rgba(0, 0, 0, 0.05);
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
   transition: all 0.2s ease;
   min-width: 0;
   margin-top: 0; /* 移除上方邊距 */
@@ -155,17 +154,63 @@ body {
 }
 
 .editor-container:hover {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.1),
-    0 8px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
 .editor {
   width: 100%;
   height: 100%;
   font-size: var(--text-base);
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--text-color);
   outline: none;
+}
+
+.editor-container .ql-toolbar.ql-snow {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px 8px 0 0;
+  background: #fff;
+}
+
+.editor-container .ql-container.ql-snow {
+  border: 1px solid #e0e0e0;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  height: calc(100% - 42px);
+}
+
+.editor-container .ql-editor {
+  font-size: 16px;
+  line-height: 1.7;
+  min-height: 200px;
+}
+
+.editor-container .ql-editor h2 {
+  font-size: 20px;
+  margin: 18px 0 8px;
+}
+
+.editor-container .ql-editor h3 {
+  font-size: 18px;
+  margin: 16px 0 6px;
+}
+
+.editor-container .ql-editor p {
+  margin: 0 0 12px;
+}
+
+.editor h2 {
+  font-size: 20px;
+  margin: 18px 0 8px;
+}
+
+.editor h3 {
+  font-size: 18px;
+  margin: 16px 0 6px;
+}
+
+.editor p {
+  margin: 0 0 12px;
 }
 
 .context-container {
@@ -683,4 +728,76 @@ body {
 
 .modal-description p {
   font-size: 1rem; /* 設定統一的描述文字大小 */
+}
+
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px 8px 0 0;
+  background: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.editor-toolbar .tool-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 6px;
+  border-right: 1px solid #f0f0f0;
+}
+
+.editor-toolbar .tool-group:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.editor-toolbar .tool-btn {
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.editor-toolbar .tool-btn:hover {
+  background: #f8fafc;
+}
+
+.editor-toolbar .tool-select {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: #fff;
+}
+
+.editor-toolbar .tool-color {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.editor-toolbar .tool-color-input {
+  width: 24px;
+  height: 24px;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.editor-container .editor {
+  border: 1px solid #e0e0e0;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 16px;
+  background: #ffffff;
 }

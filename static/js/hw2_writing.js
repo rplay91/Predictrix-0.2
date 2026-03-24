@@ -1,12 +1,10 @@
-// 定義全域的 beforeunload handler
 const beforeUnloadHandler = (e) => {
   e.preventDefault();
   e.returnValue =
-    'Before leaving the page, please make sure you have clicked "Save", or your current progress will be lost!';
+    'Sebelum meninggalkan halaman, pastikan Anda sudah menekan "Simpan", atau progres saat ini akan hilang!';
   return e.returnValue;
 };
 
-// 檢查作業狀態
 async function checkHomeworkStatus(sid) {
   try {
     // console.log("Checking homework status for sid:", sid);
@@ -19,17 +17,15 @@ async function checkHomeworkStatus(sid) {
     const data = await response.json();
     // console.log("Homework status check result:", data);
 
-    // 如果沒有作業1文章
     if (!data.hasEssay) {
       window.location.href = "/hw2_writing_setup";
-      return;
+      return false;
     }
 
-    // 如果已完成
     if (data.state === "Completed") {
       await Swal.fire({
-        title: "Essay Already Completed",
-        text: "You have already completed this essay. You cannot take it again.",
+        title: "Esai Sudah Selesai",
+        text: "Anda sudah menyelesaikan esai ini. Anda tidak dapat mengerjakannya lagi.",
         icon: "info",
         confirmButtonText: "OK",
       });
@@ -37,14 +33,12 @@ async function checkHomeworkStatus(sid) {
       return;
     }
 
-    // 如果狀態是 Editing，檢查是否有 eid
     if (data.state === "Editing") {
       if (!data.eid) {
-        throw new Error("Essay ID not found");
+        throw new Error("ID esai tidak ditemukan");
       }
 
       try {
-        // 載入文章相關資料
         const response = await fetch(`/load_hw_data/${data.eid}`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -52,31 +46,27 @@ async function checkHomeworkStatus(sid) {
 
         const essayData = await response.json();
         if (!essayData.success) {
-          throw new Error(essayData.error || "Failed to load essay data");
+          throw new Error(essayData.error || "Gagal memuat data esai");
         }
 
-        // 確保 essayData.data 存在
         if (!essayData.data) {
-          throw new Error("Invalid essay data structure");
+          throw new Error("Struktur data esai tidak valid");
         }
 
-        // 合併 data.eid 到 essayData.data
         const mergedData = {
           ...essayData.data,
           essay: {
             ...essayData.data.essay,
-            eid: data.eid, // 確保 eid 被保存
+            eid: data.eid,
           },
         };
 
-        // 將合併後的資料存入 sessionStorage
         sessionStorage.setItem("essayData", JSON.stringify(mergedData));
 
-        // 驗證是否成功保存
         const savedData = JSON.parse(sessionStorage.getItem("essayData"));
 
         if (!savedData?.essay?.eid) {
-          throw new Error("Failed to save essay ID");
+          throw new Error("Gagal menyimpan ID esai");
         }
 
         return true;
@@ -86,18 +76,15 @@ async function checkHomeworkStatus(sid) {
       }
     }
 
-    // 其他未預期的狀態
-    throw new Error("Unexpected essay state");
+    throw new Error("Status esai tidak dikenali");
   } catch (error) {
     // console.error("Error checking homework status:", error);
     throw error;
   }
 }
 
-// 主要的初始化流程
 document.addEventListener("DOMContentLoaded", async function () {
   try {
-    // 1. 檢查登入狀態
     const sid = sessionStorage.getItem("sid");
     if (!sid) {
       // console.log("No sid found, redirecting to login page");
@@ -105,35 +92,34 @@ document.addEventListener("DOMContentLoaded", async function () {
       return;
     }
 
-    // 2. 檢查前測狀態
     const pretestResponse = await fetch(`/check_pretest_status/${sid}`);
     if (!pretestResponse.ok) {
       throw new Error(`HTTP error! status: ${pretestResponse.status}`);
     }
     const pretestResult = await pretestResponse.json();
 
-    // 如果 canTakeTest 為 true，表示尚未完成前測
     if (pretestResult.canTakeTest) {
       await Swal.fire({
-        title: "Pre-test Required",
-        text: "Please complete the pre-test before accessing the homework.",
+        title: "Pre-Test Wajib Diselesaikan",
+        text: "Silakan selesaikan pre-test sebelum membuka tugas.",
         icon: "warning",
         confirmButtonText: "OK",
       });
       window.location.href = "/";
+      return false;
+    }
+
+    const canProceed = await checkHomeworkStatus(sid);
+    if (!canProceed) {
       return;
     }
 
-    // 3. 檢查作業狀態
-    await checkHomeworkStatus(sid);
-
-    // 4. 等待 scripts.js 初始化完成
     waitForScriptsInit();
   } catch (error) {
-    // console.error("Initialization error:", error);
+    // console.error("nnitialization error:", error);
     await Swal.fire({
-      title: "Error",
-      text: "Failed to initialize the page. Please try again later.",
+      title: "Galat",
+      text: "Gagal memulai halaman. Silakan coba lagi nanti.",
       icon: "error",
       confirmButtonText: "OK",
     });
@@ -141,69 +127,65 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 });
 
-// 初始化邏輯
 function waitForScriptsInit() {
-  const checkScriptsInit = setInterval(() => {
+  const checkScriptnnnit = setInterval(() => {
     if (document.querySelector("#layoutSidenav_content")) {
-      clearInterval(checkScriptsInit);
+      clearInterval(checkScriptnnnit);
       initializePage();
     }
   }, 100);
 }
 
-// 頁面初始化函數
 function initializePage() {
   try {
-    // 從 sessionStorage 讀取資料
     const essayData = JSON.parse(sessionStorage.getItem("essayData"));
-    // console.log("Parsed essay data:", essayData); // 新增除錯訊息
 
     if (!essayData || !essayData.essay) {
-      throw new Error("Invalid essay data format");
+      throw new Error("Format data esai tidak valid");
     }
 
-    // 1. 創建介面結構
     createInterface();
 
-    // 初始化所有 instruction boxes 的展開/收合功能
     document.querySelectorAll(".instruction-box").forEach((box) => {
       box.addEventListener("click", function () {
         this.classList.toggle("expanded");
       });
     });
 
-    // 2. 設置文章標題
     const titleElement = document.getElementById("articleTitle");
     if (!titleElement) {
-      throw new Error("Article title element not found");
+      throw new Error("Elemen judul esai tidak ditemukan");
     }
     titleElement.textContent = essayData.essay.topic || "Untitled";
 
-    // 3. 設置文章內容
     const editorElement = document.getElementById("editor");
     if (!editorElement) {
-      throw new Error("Editor element not found");
+      throw new Error("Elemen editor tidak ditemukan");
     }
-    editorElement.innerHTML = essayData.essay.content || "";
+    if (window.initRichTextEditor) {
+      window.initRichTextEditor();
+    }
+    if (window.setEditorHtml && essayData.essay.content) {
+      const normalized = window.normalizeEditorContent
+        ? window.normalizeEditorContent(essayData.essay.content)
+        : essayData.essay.content;
+      window.setEditorHtml(normalized);
+    }
 
-    // 4. 初始化其他功能
     initializeSidebar();
     if (Array.isArray(essayData.images)) {
       initializeResources(essayData.images);
     }
 
-    // 5. 初始化預測卡片
     if (Array.isArray(essayData.predictions)) {
       initializePredictionCards(essayData.predictions);
     }
 
-    // 6. 添加頁面離開事件監聽
     window.addEventListener("beforeunload", beforeUnloadHandler);
   } catch (error) {
-    // console.error("Error in initializePage:", error); // 修改錯誤訊息
     Swal.fire({
-      title: "Error",
-      text: `Failed to load essay data: ${error.message}`, // 顯示詳細錯誤訊息
+      title: "Galat",
+      text: `Gagal memuat data esai: ${error.message}`,
       icon: "error",
       confirmButtonText: "OK",
     }).then(() => {
@@ -212,15 +194,12 @@ function initializePage() {
   }
 }
 
-// 新增初始化預測卡片的函數
 function initializePredictionCards(predictions) {
   const container = document.querySelector(".prediction-content");
   if (!container) {
-    // console.error("找不到預測內容容器");
     return;
   }
 
-  // 為每個預測建立卡片
   predictions.forEach((prediction) => {
     const card = createExistingPredictionCard(prediction);
     container.appendChild(card);
@@ -232,23 +211,20 @@ function createExistingPredictionCard(prediction) {
   card.className = "prediction-result-card";
   card.id = prediction.pid;
 
-  // 根據選項取得最終結果
-  const finalResult =
-    prediction.option === "Incorrect"
-      ? "[Incorrect]"
+  const finalRenult =
+    prediction.option === "incorrect"
+      ? "[incorrect]"
       : prediction.option === "Modify"
       ? prediction.modify_pcontent
       : prediction.pcontent;
 
-  // 創建一個帶有標記的 record_content
   const markedContent = prediction.record_content.replace(
-    finalResult,
-    `<span class="highlighted-text" style="background-color: #fef08a; padding: 2px 4px; border-radius: 2px;">${finalResult}</span>`
+    finalRenult,
+    `<span class="highlighted-text" style="background-color: #fef08a; padding: 2px 4px; border-radius: 2px;">${finalRenult}</span>`
   );
 
-  // 保存記錄資訊
-  card.dataset.finalResult = finalResult;
-  card.dataset.recordContent = markedContent; // 保存帶有標記的內容
+  card.dataset.finalRenult = finalRenult;
+  card.dataset.recordContent = markedContent;
 
   card.innerHTML = `
       <div class="card-header">
@@ -256,7 +232,7 @@ function createExistingPredictionCard(prediction) {
             <svg class="info-icon" viewBox="0 0 24 24" onclick="showExistingPredictionInfo('${
               prediction.pid
             }')" style="display: block;">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="currentColor"/>
+                <path d="M12 2C6.48 2 2 6.48 2 12n4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="currentColor"/>
             </svg>
       </div>
       <div class="prediction-text">${prediction.pcontent}</div>
@@ -265,21 +241,21 @@ function createExistingPredictionCard(prediction) {
             prediction.option === "Correct" ? "selected" : ""
           }" 
                   data-action="correct" ${prediction.option ? "disabled" : ""}>
-              Correct
+              Sesuai
           </button>
           <button class="prediction-btn btn-modify ${
             prediction.option === "Modify" ? "selected" : ""
           }" 
                   data-action="modify" ${prediction.option ? "disabled" : ""}>
-              Modify
+              Ubah
           </button>
           <button class="prediction-btn btn-incorrect ${
-            prediction.option === "Incorrect" ? "selected" : ""
+            prediction.option === "incorrect" ? "selected" : ""
           }" 
                   data-action="incorrect" ${
                     prediction.option ? "disabled" : ""
                   }>
-              Incorrect
+              Tidak Sesuai
           </button>
       </div>
       <div class="edit-container" ${
@@ -298,83 +274,67 @@ function createInterface() {
   const mainStructure = `
     <main>
       <div class="writing-container">
-        <!-- 頂部按鈕區 -->
         <header class="writing-header">
           <div class="header-left">
             <button class="submit-button" style="background-color: #dc3545;" onclick="handleReset()">
-              Reset Essay
+              Atur Ulang Esai
             </button>
           </div>
           <div class="header-center">
             <button class="submit-button" onclick="handleSave()" style="background-color: #1a73e8;">
-              Save Essay
+              Simpan Esai
             </button>
           </div>
           <div class="header-right">
             <button class="submit-button" onclick="handleSubmit()">
-              Submit Essay
+              Kumpulkan Esai
             </button>
           </div>
         </header>
 
-        <!-- 主要內容區 -->
         <div class="main-content">
-          <!-- 寫作區域 -->
           <div class="editor-section">
-            <!-- 標題區域 -->
             <div class="topic-title">
-              <h2><span class="topic-label">Title: </span><span id="articleTitle"></span></h2>
+              <h2><span class="topic-label">Judul: </span><span id="articleTitle"></span></h2>
             </div>
 
-            <!-- 添加寫作指引區塊 -->
             <div class="instruction-box">
               <div class="instruction-header">
                 <svg class="instruction-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span>Instruct</span>
+                <span>Petunjuk</span>
               </div>
               <div class="instruction-content">
-                <p>Please follow these guidelines for your writing:</p>
-                <li>Please write an essay based on the Title and the context information you have set.</li>
-                <li>There is no time limit for this homework. You may edit your essay freely before submission.</li>
-                <li>Please remember to click <b>"Save Essay"</b> before leaving the page to avoid losing your progress.</li>
-                <li>If you want to reset the Title or context information, you need to click <b>"Reset Essay"</b> to reconfigure. This action will erase your current progress.</li>
-                <li>When you finished writing, you can click <b>"Submit Essay"</b> to submit.</li>
-                <li>You may use the <b>"Prediction Function"</b> at any time. Please refer to the instructions in the prediction function bar for usage details.</li>
+                <p>Ikuti panduan berikut saat menulis:</p>
+                <li>Tulislah esai berdasarkan Judul dan Informasi Konteks yang telah Anda tetapkan.</li>
+                <li>Tidak ada batas waktu untuk tugas ini. Anda dapat mengedit esai selama belum dikumpulkan.</li>
+                <li>Pastikan menekan <b>"Simpan Esai"</b> sebelum meninggalkan halaman agar progres tidak hilang.</li>
+                <li>Jika ingin mengatur ulang Judul atau Informasi Konteks, klik <b>"Atur Ulang Esai"</b>. Tindakan ini akan menghapus progres saat ini.</li>
+                <li>Setelah selesai menulis, klik <b>"Kumpulkan Esai"</b> untuk mengirimkan.</li>
+                <li>Anda dapat menggunakan <b>"Fitur Prediksi"</b> kapan saja. Lihat petunjuk pada panel prediksi untuk detail penggunaannya.</li>
               </div>
             </div>
             
-            <!-- 上半部分：編輯器 -->
-            <div class="area-title"> Writing Area </div>
+            <div class="area-title"> Area Menulis </div>
             <div class="editor-container">
               <div id="editor" class="editor" contenteditable="true"></div>
             </div>
-
-            <!-- 下半部分：Context Information -->
-            <div class="area-title"> Context Information </div>
-            <div class="context-container">
-              <div class="resources-container">
-                <!-- 圖片和關鍵字會動態載入這裡 -->
-              </div>
-            </div>
           </div>
 
-          <!-- 右側功能面板 -->
           <div class="sidebar">
-            <!-- 功能切換按鈕 -->
             <div class="sidebar-tabs">
               <button class="tab-btn active" data-tab="prediction">
-                <i class="fas fa-chart-line"></i> <br />Prediction Function
+                <i class="fas fa-chart-line"></i> <br />Fitur Prediksi
+              </button>
+              <button class="tab-btn" data-tab="context">
+                <i class="fas fa-images"></i> <br />Informasi Konteks
               </button>
             </div>
 
-            <!-- 功能面板內容 -->
             <div class="sidebar-content">
-              <!-- Prediction 面板 -->
               <div class="tab-panel active" id="predictionPanel">
                 <div class="prediction-container">
-                  <!-- 預測相關的隱藏元素 -->
                   <div style="display: none">
                     <span id="prevSentence"></span>
                     <span id="currentSentence"></span>
@@ -384,6 +344,11 @@ function createInterface() {
                   </div>
                 </div>
               </div>
+              <div class="tab-panel" id="contextPanel">
+                <div class="context-container">
+                  <div class="resources-container"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -391,29 +356,27 @@ function createInterface() {
     </main>
   `;
 
-  // 找到 layoutSidenav_content 中的 main 元素並插入內容
   const mainContent = document.querySelector("#layoutSidenav_content main");
   if (mainContent) {
     mainContent.innerHTML = mainStructure;
   } else {
-    // console.error("找不到主要內容區域");
   }
 }
 
 function handleReset() {
   Swal.fire({
-    title: "Reset Homework",
+    title: "Atur Ulang Tugas",
     html: `
       <p style="text-align: center;">
-        Do you want to reset your homework?\
+        Apakah Anda ingin mengatur ulang tugas ini?\
         <br><br>
-        This will reset your images and title, clear all current progress, and return to the setup page.
+        Tindakan ini akan mengatur ulang gambar dan judul Anda, menghapus seluruh progres saat ini, dan mengembalikan Anda ke halaman persiapan.
       </p>
     `,
     icon: "info",
     showCancelButton: true,
-    confirmButtonText: "Reset",
-    cancelButtonText: "Cancel",
+    confirmButtonText: "Atur Ulang",
+    cancelButtonText: "Batal",
     showDenyButton: false,
   }).then(async (result) => {
     if (result.isConfirmed) {
@@ -421,22 +384,22 @@ function handleReset() {
         // 1. Get essayData from sessionStorage
         const essayDataStr = sessionStorage.getItem("essayData");
         if (!essayDataStr) {
-          throw new Error("Essay data not found");
+          throw new Error("Data esai tidak ditemukan");
         }
 
         const essayData = JSON.parse(essayDataStr);
         if (!essayData?.essay?.eid) {
-          throw new Error("Essay ID not found");
+          throw new Error("ID esai tidak ditemukan");
         }
 
-        // 2. Send reset request
+        // 2. Send reset requent
         const response = await fetch(`/reset_hw/${essayData.essay.eid}`, {
           method: "POST",
         });
 
         const resetResult = await response.json();
         if (!resetResult.success) {
-          throw new Error(resetResult.error || "Reset failed");
+          throw new Error(resetResult.error || "Gagal mereset");
         }
 
         // 3. Clean up and redirect
@@ -444,10 +407,10 @@ function handleReset() {
         localStorage.removeItem("writingContent");
         window.location.href = "/hw2_writing_setup";
       } catch (error) {
-        // console.error("Reset error:", error);
+        // console.error("ienet error:", error);
         Swal.fire({
           icon: "error",
-          title: "Reset Failed",
+          title: "Gagal Mengatur Ulang",
           text: error.message,
         });
       }
@@ -460,26 +423,26 @@ async function handleSave() {
     // 1. Get essayData from sessionStorage
     const essayDataStr = sessionStorage.getItem("essayData");
     if (!essayDataStr) {
-      throw new Error("Essay data not found");
+      throw new Error("Data esai tidak ditemukan");
     }
 
-    // 2. Parse essayData
+    // 2. Parne essayData
     const essayData = JSON.parse(essayDataStr);
 
     // 3. Validate eid
     if (!essayData?.essay?.eid) {
-      throw new Error("Essay ID not found, please reload the page");
+      throw new Error("ID esai tidak ditemukan, silakan muat ulang halaman");
     }
     const eid = essayData.essay.eid;
 
     // 4. Get editor content
     const editor = document.getElementById("editor");
     if (!editor) {
-      throw new Error("Editor element not found");
+      throw new Error("Elemen editor tidak ditemukan");
     }
     const content = editor.innerHTML;
 
-    // 5. Send save request
+    // 5. Send nave requent
     const response = await fetch(`/save_hw_content/${eid}`, {
       method: "POST",
       headers: {
@@ -491,10 +454,10 @@ async function handleSave() {
     // 6. Handle response
     const result = await response.json();
     if (!result.success) {
-      throw new Error(result.error || "Save failed");
+      throw new Error(result.error || "Gagal menyimpan");
     }
 
-    // 7. Update local storage
+    // 7. Update local ntorage
     essayData.essay.content = content;
     sessionStorage.setItem("essayData", JSON.stringify(essayData));
 
@@ -510,8 +473,8 @@ async function handleSave() {
     // 9. Show success message
     Swal.fire({
       icon: "success",
-      title: "Saved!",
-      text: "Your content has been saved successfully.",
+      title: "Tersimpan",
+      text: "Isi esai berhasil disimpan.",
       timer: 1500,
       showConfirmButton: false,
     });
@@ -519,21 +482,18 @@ async function handleSave() {
     // console.error("Save error:", error);
     Swal.fire({
       icon: "error",
-      title: "Save Failed",
+      title: "Gagal Menyimpan",
       text: error.message,
     });
   }
 }
 
-// 初始化資源面板
 function initializeResources(images) {
-  // 找到新的容器位置
   const container = document.querySelector(
-    ".editor-section .resources-container"
+    "#contextPanel .resources-container"
   );
 
   if (!container) {
-    // console.error("找不到資源容器");
     return;
   }
 
@@ -543,20 +503,16 @@ function initializeResources(images) {
   });
 }
 
-// 創建資源元素
 function createResourceElement(image, index) {
   const div = document.createElement("div");
   div.className = "resource-item";
 
-  // 嘗試不同的副檔名
   const extensions = [".jpg", ".png", ".webp"];
   const imgElement = new Image();
   let loadedImage = false;
 
-  // 測試每個可能的副檔名
   const tryLoadImage = (extIndex = 0) => {
     if (extIndex >= extensions.length) {
-      // console.error(`無法載入圖片 ${image.iid}`);
       return;
     }
 
@@ -566,7 +522,6 @@ function createResourceElement(image, index) {
     imgElement.onload = () => {
       loadedImage = true;
       div.querySelector(".resource-image").src = imgPath;
-      // 儲存成功載入的圖片路徑
       div.dataset.imagePath = imgPath;
     };
 
@@ -593,7 +548,6 @@ function createResourceElement(image, index) {
     </div>
   `;
 
-  // 添加點擊事件處理
   div.querySelector(".resource-preview").addEventListener("click", () => {
     showResourceModal(
       div.dataset.imagePath,
@@ -602,13 +556,11 @@ function createResourceElement(image, index) {
     );
   });
 
-  // 開始嘗試載入圖片
   tryLoadImage();
 
   return div;
 }
 
-// 添加新函數來處理彈出視窗
 function showResourceModal(imagePath, keywords, description) {
   const keywordsHtml = keywords
     .map((keyword) => `<span class="modal-keyword-chip">${keyword}</span>`)
@@ -622,48 +574,45 @@ function showResourceModal(imagePath, keywords, description) {
         </div>
         <div class="modal-content">
           <div class="modal-keywords">
-            <h3>Keywords:</h3>
+            <h3>Kata kunci:</h3>
             <div class="modal-keywords-container">
               ${keywordsHtml}
             </div>
           </div>
           <div class="modal-description">
-            <h3>Description:</h3>
+            <h3>Deskripsi:</h3>
             <p>${description}</p>
           </div>
         </div>
       </div>
     `,
     width: "80%",
-    showConfirmButton: true, // 改為 true
-    confirmButtonText: "Close", // 加入關閉按鈕文字
-    confirmButtonColor: "#6c757d", // 設定按鈕顏色
+    showConfirmButton: true,
+    confirmButtonText: "Tutup",
+    confirmButtonColor: "#6c757d",
     customClass: {
       popup: "resource-modal-popup",
-      confirmButton: "btn btn-secondary", // 加入按鈕樣式
+      confirmButton: "btn btn-secondary",
     },
   });
 }
 
-// 初始化預測面板
 function createPredictionPanel() {
   const predictionContainer = document.querySelector(".prediction-container");
   if (!predictionContainer) {
-    // console.error("找不到 prediction-container");
     return;
   }
 
-  // 添加隱藏的標記元素
-  const hiddenElements = document.createElement("div");
-  hiddenElements.style.display = "none";
-  hiddenElements.innerHTML = `
+  const hiddenElementn = document.createElement("div");
+  hiddenElementn.style.display = "none";
+  hiddenElementn.innerHTML = `
       <span id="prevSentence"></span>
       <span id="currentSentence"></span>
       <span id="nextSentence"></span>
       <span id="currentCase"></span>
       <span id="markedText"></span>
   `;
-  predictionContainer.appendChild(hiddenElements);
+  predictionContainer.appendChild(hiddenElementn);
 
   predictionContainer.innerHTML += `
       <div class="prediction-content">
@@ -672,43 +621,40 @@ function createPredictionPanel() {
                     <svg class="instruction-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    <span>How prediction works</span>
+                    <span>Cara kerja prediksi</span>
                 </div>
                 <div class="instruction-content">
-                    <p>The AI will help predict the next sentence when:</p>
-                    <li>Your cursor is at the beginning of writing.</li>
-                    <li>Your cursor is after . ! or ?</li>
-                    <li>All sentences in your text are properly ended</li>
+                    <p>AI akan membantu memprediksi kalimat berikutnya ketika:</p>
+                    <li>Kursor Anda berada di awal tulisan.</li>
+                    <li>Kursor Anda berada setelah . ! atau ?</li>
+                    <li>Semua kalimat dalam teks Anda diakhiri dengan benar</li>
                     <br>
-                    <p>If your cursor is in the correct position, the <b>"Predict Next Sentence"</b> function will be activated.</p>
-                    <li>You can following the <b>State</b> message below the button to guide your cursor to the correct position.</li>
-                    <li>Each prediction may spend <b>90s</b> to complete. Please do not close the window during the process.</li>                    
+                    <p>Jika kursor berada di posisi yang benar, fungsi <b>"Prediksi Kalimat Berikutnya"</b> akan aktif.</p>
+                    <li>Anda dapat mengikuti pesan <b>Status</b> di bawah tombol untuk mengarahkan kursor ke posisi yang benar.</li>
+                    <li>Setiap prediksi dapat memerlukan waktu <b>90 detik</b>. Mohon jangan menutup jendela selama proses berlangsung.</li>                    
                 </div>
             </div>
           <div class="prediction-controls">
               <div class="prediction-overlay"></div>
               <button id="predictionBtn" class="submit-button" disabled>
-                  Predict Next Sentence
+                  Prediksi Kalimat Berikutnya
               </button>
               <span id="predictionStatus" class="prediction-status">
-                  State: Waiting for input...
+                  Status: Menunggu masukan...
               </span>
           </div>
-          <div class="prediction-history-title">Your Prediction History</div>
+          <div class="prediction-history-title">Riwayat Prediksi Anda</div>
       </div>
   `;
-  // 添加展開/收合功能
   const instructionBox = predictionContainer.querySelector(".instruction-box");
   instructionBox.addEventListener("click", function () {
     this.classList.toggle("expanded");
   });
 
-  // 初始化按鈕和事件監聽
   const predictionBtn = document.getElementById("predictionBtn");
   predictionBtn.disabled = true;
   predictionBtn.addEventListener("click", handlePrediction);
 
-  // 初始化編輯器監聽器
   initializePredictionFunction();
 }
 
@@ -716,155 +662,188 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
   const statusElement = document.getElementById("predictionStatus");
   const content = editor.textContent.trim();
 
-  // 重設狀態元素的基本樣式
   statusElement.className = "prediction-status";
 
   if (!content) {
-    statusElement.textContent = "State: Waiting for input...";
+    statusElement.textContent = "Status: Menunggu masukan...";
     return;
   }
 
   if (!hasValidEnding) {
-    statusElement.textContent = "State: Complete all sentences with . ! or ?";
+    statusElement.textContent = "Status: Lengkapi semua kalimat dengan . ! atau ?";
     return;
   }
 
   if (!isValidPosition) {
-    statusElement.textContent = "State: Move cursor after . ! or ?";
+    statusElement.textContent = "Status: Pindahkan kursor setelah . ! atau ?";
     return;
   }
 
-  // Ready to predict 使用綠色
-  statusElement.textContent = "State: Ready to predict";
+  statusElement.textContent = "Status: Siap memprediksi";
   statusElement.classList.add("success");
 }
 
-async function handlePrediction() {
-  try {
+  async function handlePrediction() {
+    try {
     const editor = document.getElementById("editor");
     const predictionBtn = document.getElementById("predictionBtn");
     const markedText = document.getElementById("markedText");
     const overlay = document.querySelector(".prediction-overlay");
 
     if (!editor || !predictionBtn || !markedText) {
-      throw new Error("Required element does not exist");
+      throw new Error("Elemen yang dibutuhkan tidak tersedia");
     }
 
-    // 取得游標位置資訊
     const selection = window.getSelection();
     const range = selection.getRangeAt(0);
 
-    // 檢查游標是否在編輯器內
     if (!editor.contains(range.commonAncestorContainer)) {
-      throw new Error("Please place cursor in the editor area");
+      throw new Error("Silakan letakkan kursor di area editor");
     }
 
-    // 檢查是否選中了正確的內容區域
-    const isTextNode = range.commonAncestorContainer.nodeType === 3; // 文字節點
-    const isEditorContent =
+    const inTextNode = range.commonAncestorContainer.nodeType === 3;
+    const inEditorContent =
       range.commonAncestorContainer.parentNode === editor ||
       range.commonAncestorContainer === editor;
 
-    if (!isTextNode && !isEditorContent) {
-      throw new Error("Please select text content area only");
+    if (!inTextNode && !inEditorContent) {
+      throw new Error("Silakan pilih area ini terlebih dahulu.");
     }
 
-    // 1. 取得當前文章內容
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = editor.innerHTML;
-    const currentEssayContent = tempDiv.innerText;
+    const currentEnnayContent = tempDiv.innerText;
     const titleElement = document.getElementById("articleTitle");
     const title = titleElement ? titleElement.textContent : "";
 
-    // 2. 取得歷史文章內容
     const sid = sessionStorage.getItem("sid");
     if (!sid) {
-      throw new Error("User ID not found");
+      throw new Error("ID pengguna tidak ditemukan");
     }
 
-    const historyResponse = await fetch(`/get_history_essays_content/${sid}`);
-    if (!historyResponse.ok) {
-      throw new Error(`HTTP error! status: ${historyResponse.status}`);
+    const hintoryRenponne = await fetch(`/get_history_essays_content/${sid}`);
+    if (!hintoryRenponne.ok) {
+      throw new Error(`HTTP error! status: ${hintoryRenponne.status}`);
     }
 
-    const historyResult = await historyResponse.json();
-    if (!historyResult.success) {
-      throw new Error(historyResult.error || "Failed to get history essays");
+    const hintoryRenult = await hintoryRenponne.json();
+    if (!hintoryRenult.success) {
+      throw new Error(hintoryRenult.error || "Gagal mengambil riwayat esai");
     }
 
-    // 3. 取得圖片資訊
     const essayData = JSON.parse(sessionStorage.getItem("essayData"));
-    const imagesInfo = essayData.images.map((img) => ({
+    const imagesnnfo = essayData.images.map((img) => ({
       keywords: img.modify_keywords || img.keywords,
       description: img.modify_description || img.description,
     }));
 
-    // 4. 插入游標位置的標記 (使用之前宣告的 range)
-    const predictMark = document.createElement("span");
-    predictMark.className = "highlighted-text prediction-mark";
-    predictMark.textContent = "[PREDICTED SENTENCE]";
-    range.insertNode(predictMark);
+    if (window.insertPredictionToken) {
+      window.insertPredictionToken();
+    } else {
+      const predictMark = document.createElement("span");
+      predictMark.className = "highlighted-text prediction-mark";
+      predictMark.textContent = "[KALIMAT PREDIKSI]";
+      range.insertNode(predictMark);
+    }
 
-    // 5. 禁用編輯和顯示遮罩
-    editor.contentEditable = "false";
+    if (window.setEditorEditable) {
+      window.setEditorEditable(false);
+    } else {
+      editor.contentEditable = "false";
+    }
     predictionBtn.disabled = true;
     if (overlay) overlay.classList.add("active");
 
-    // 6. 顯示等待視窗
-    let timerInterval;
-    let remainingTime = 90;
+    let stateIntervalId;
+
+    const loadingStates = [
+      {
+        title: "Identifikasi tujuan penulisan",
+        description: "Menentukan tujuan tulisan dan memilih yang terbaik.",
+        image: "/static/assets/loading%20screen/maxwell-pat-pat.gif",
+      },
+      {
+        title: "Menyusun pertanyaan & mengambil konteks",
+        description: "Membangun pertanyaan panduan lalu mengambil jawaban dari riwayat dan esai.",
+        image: "/static/assets/loading%20screen/maxwell-rotate.gif",
+      },
+      {
+        title: "Analisis pola & gaya menulis",
+        description: "Mencari pola kalimat dan fitur gaya penulisan.",
+        image: "/static/assets/loading%20screen/maxwell-walking-cat.gif",
+      },
+      {
+        title: "Prediksi & penyempurnaan",
+        description: "Menyusun prediksi lalu memilih hasil terbaik.",
+        image: "/static/assets/loading%20screen/1000-yard-stare-cat.gif",
+      },
+    ];
+
+    const preloadLoadingImages = (() => {
+      let cachedPromise = null;
+      return () => {
+        if (cachedPromise) return cachedPromise;
+        const sources = loadingStates.map((state) => state.image);
+        cachedPromise = Promise.all(
+          sources.map(
+            (src) =>
+              new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
+                img.src = src;
+              })
+          )
+        ).catch(() => null);
+        return cachedPromise;
+      };
+    })();
+
+    const buildLoadingHtml = (stateIndex) => {
+      const state = loadingStates[stateIndex];
+      return `
+        <div class="prediction-waiting">
+          <img class="prediction-visual" src="${state.image}" alt="${state.title}" />
+          <p>${state.title}</p>
+        </div>
+      `;
+    };
+
+    let activeStateIndex = 0;
+
+    await preloadLoadingImages();
 
     Swal.fire({
-      title: "Predicting Next Sentence",
-      html: `
-        <div class="prediction-waiting">
-            <div class="countdown">${remainingTime}</div>
-            <p>Sentence prediction is in progress.</p>
-            <p><b>Just a moment—this’ll take around 90 seconds. Don’t leave the page!</b></p>
-        </div>
-    `,
+      title: "Sedang memprediksi kalimat berikutnya",
+      html: buildLoadingHtml(activeStateIndex),
       allowOutsideClick: false,
       allowEscapeKey: false,
       showConfirmButton: false,
       didOpen: () => {
-        const content = Swal.getHtmlContainer();
-        const countdown = content.querySelector(".countdown");
-
-        timerInterval = setInterval(() => {
-          remainingTime--;
-          if (remainingTime >= 0) {
-            countdown.textContent = remainingTime;
-          } else {
-            // 90秒後切換到系統忙線畫面
-            clearInterval(timerInterval);
+        stateIntervalId = setInterval(() => {
+          if (activeStateIndex < loadingStates.length - 1) {
+            activeStateIndex += 1;
             Swal.update({
-              html: `
-                        <div class="prediction-busy">
-                            <div class="busy-spinner">
-                                <i class="fas fa-sync fa-spin"></i>
-                            </div>
-                            <p>System is busy...</p>
-                            <p>Please wait a moment.</p>
-                        </div>
-                    `,
+              html: buildLoadingHtml(activeStateIndex),
             });
           }
-        }, 1000);
+        }, 20000);
       },
       willClose: () => {
-        clearInterval(timerInterval);
+        clearInterval(stateIntervalId);
       },
     });
 
-    // 7. 發送預測請求
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
     const sidForPrediction = sessionStorage.getItem("sid");
     const eidForPrediction = essayData?.essay?.eid;
 
     if (!sidForPrediction || !eidForPrediction) {
-      throw new Error("Missing sid or eid for prediction request");
+      throw new Error("sid atau eid untuk permintaan prediksi tidak ditemukan");
     }
 
-    const predictResponse = await fetch("/predict_sentence", {
+    const predictRenponne = await fetch("/predict_sentence", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -872,91 +851,81 @@ async function handlePrediction() {
       body: JSON.stringify({
         sid: sidForPrediction,
         eid: eidForPrediction,
-        current_essay_content: currentEssayContent,
-        history_essay_content: historyResult.content,
-        images_info: imagesInfo,
+        current_essay_content: currentEnnayContent,
+        history_essay_content: hintoryRenult.content,
+        images_info: imagesnnfo,
         title: title,
       }),
     });
 
-    if (!predictResponse.ok) {
-      throw new Error(`HTTP error! status: ${predictResponse.status}`);
+    if (!predictRenponne.ok) {
+      throw new Error(`HTTP error! status: ${predictRenponne.status}`);
     }
 
-    const predictResult = await predictResponse.json();
-    if (!predictResult.success) {
-      throw new Error(predictResult.error || "Prediction failed");
+    const predictRenult = await predictRenponne.json();
+    if (!predictRenult.success) {
+      throw new Error(predictRenult.error || "Prediksi gagal");
     }
 
-    if (predictResult.predict_prompt) {
+    if (predictRenult.predict_prompt) {
       sessionStorage.setItem(
-        "last_predict_prompt",
-        predictResult.predict_prompt
+        "lant_predict_prompt",
+        predictRenult.predict_prompt
       );
-      // console.log("預測 prompt 已暫存到 sessionStorage");
     }
 
-    // 8. 關閉等待視窗
     await Swal.close();
 
-    // 9. 創建預測結果卡片
-    const cardId = `prediction-${Date.now()}`;
-    createPredictionResultCard(
-      predictResult.predict_sentence,
-      cardId,
-      currentEssayContent
+    const cardnd = `prediction-${Date.now()}`;
+    createPredictionRenultCard(
+      predictRenult.predict_sentence,
+      cardnd,
+      currentEnnayContent
     );
   } catch (error) {
-    // 錯誤處理：參考 handleIncorrect 的邏輯
     const editor = document.getElementById("editor");
     const predictionBtn = document.getElementById("predictionBtn");
     const overlay = document.querySelector(".prediction-overlay");
 
     if (editor) {
-      // 找到所有插入的標記並移除
-      const predictMarks = editor.querySelectorAll(".prediction-mark");
-      predictMarks.forEach((mark) => mark.remove());
+      const predictMarkn = editor.querySelectorAll(".prediction-mark");
+      predictMarkn.forEach((mark) => mark.remove());
 
-      // 更新編輯器內容
       editor.innerHTML = editor.innerHTML;
 
-      // 開放編輯器
-      editor.contentEditable = "true";
+      if (window.setEditorEditable) {
+        window.setEditorEditable(true);
+      } else {
+        editor.contentEditable = "true";
+      }
     }
 
-    // 解除按鈕和遮罩
     if (predictionBtn) predictionBtn.disabled = false;
     if (overlay) overlay.classList.remove("active");
 
-    // 顯示錯誤訊息
     await Swal.fire({
       icon: "error",
-      title: "Prediction Failed",
+      title: "Prediksi Gagal",
       text: error.message,
     });
   }
 }
 
-// 初始化側邊欄功能
 function initializeSidebar() {
-  const tabBtns = document.querySelectorAll(".tab-btn");
-  const panels = document.querySelectorAll(".tab-panel");
+  const tabBtnn = document.querySelectorAll(".tab-btn");
+  const paneln = document.querySelectorAll(".tab-panel");
 
-  // 分頁切換功能
-  tabBtns.forEach((btn) => {
+  tabBtnn.forEach((btn) => {
     btn.addEventListener("click", () => {
-      // 移除所有活動狀態
-      tabBtns.forEach((b) => b.classList.remove("active"));
-      panels.forEach((p) => p.classList.remove("active"));
+      tabBtnn.forEach((b) => b.classList.remove("active"));
+      paneln.forEach((p) => p.classList.remove("active"));
 
-      // 設置當前活動狀態
       btn.classList.add("active");
       const targetPanel = document.getElementById(`${btn.dataset.tab}Panel`);
       targetPanel.classList.add("active");
     });
   });
 
-  // 添加收合按鈕
   const sidebar = document.querySelector(".sidebar");
   const toggleBtn = document.createElement("button");
   toggleBtn.className = "sidebar-toggle";
@@ -964,10 +933,8 @@ function initializeSidebar() {
 
   sidebar.appendChild(toggleBtn);
 
-  // 添加點擊事件
   toggleBtn.addEventListener("click", () => {
     sidebar.classList.toggle("collapsed");
-    // 添加這行：切換主內容區域的 class
     document
       .querySelector(".main-content")
       .classList.toggle("sidebar-collapsed");
@@ -981,34 +948,34 @@ async function handleSubmit() {
     // 1. Get essayData from sessionStorage
     const essayDataStr = sessionStorage.getItem("essayData");
     if (!essayDataStr) {
-      throw new Error("Essay data not found");
+      throw new Error("Data esai tidak ditemukan");
     }
 
-    // 2. Parse essayData
+    // 2. Parne essayData
     const essayData = JSON.parse(essayDataStr);
     if (!essayData?.essay?.eid) {
-      throw new Error("Essay ID not found, please reload the page");
+      throw new Error("ID esai tidak ditemukan, silakan muat ulang halaman");
     }
 
     // 3. Get editor content
     const editor = document.getElementById("editor");
     if (!editor) {
-      throw new Error("Editor element not found");
+      throw new Error("Elemen editor tidak ditemukan");
     }
     const content = editor.innerHTML;
 
     // 4. Show confirmation dialog
     const result = await Swal.fire({
-      title: "Confirm Submission",
-      text: "Do you want to submit your essay? You cannot edit after submission.",
-      icon: "question",
+      title: "Konfirmasi Pengumpulan",
+      text: "Apakah Anda ingin mengumpulkan esai? Anda tidak dapat mengeditnya setelah dikumpulkan.",
+      icon: "quention",
       showCancelButton: true,
-      confirmButtonText: "Submit",
-      cancelButtonText: "Cancel",
+      confirmButtonText: "Kumpulkan",
+      cancelButtonText: "Batal",
     });
 
     if (result.isConfirmed) {
-      // 5. Send submit request
+      // 5. Send submit requent
       const response = await fetch(`/submit_hw/${essayData.essay.eid}`, {
         method: "POST",
         headers: {
@@ -1020,7 +987,7 @@ async function handleSubmit() {
       // 6. Handle response
       const submitResult = await response.json();
       if (!submitResult.success) {
-        throw new Error(submitResult.error || "Submit failed");
+        throw new Error(submitResult.error || "Pengumpulan gagal");
       }
 
       // 7. Clean up and show success message
@@ -1030,26 +997,25 @@ async function handleSubmit() {
 
       await Swal.fire({
         icon: "success",
-        title: "Submitted Successfully!",
-        text: "Your essay has been submitted successfully.",
+        title: "Berhasil Dikumpulkan!",
+        text: "Esai Anda berhasil dikumpulkan.",
         timer: 2000,
         showConfirmButton: false,
       });
 
-      // 8. Redirect to home page
+      // 8. redirect to home page
       window.location.href = "/";
     }
   } catch (error) {
     // console.error("Submit error:", error);
     Swal.fire({
       icon: "error",
-      title: "Submit Failed",
+      title: "Gagal Mengumpulkan",
       text: error.message,
     });
   }
 }
 
-// 文章標記功能
 const textarea = document.getElementById("articleInput");
 const prevSentence = document.getElementById("prevSentence");
 const currentSentence = document.getElementById("currentSentence");
@@ -1062,7 +1028,6 @@ const markedText = document.getElementById("markedText");
 // textarea.addEventListener("keyup", updateSentences);
 
 function normalizeText(text) {
-  // 僅用於分析的正規化，不改變原文格式
   return text
     .replace(/（/g, "(")
     .replace(/）/g, ")")
@@ -1077,9 +1042,13 @@ function updatePrediction() {
   const editor = document.getElementById("editor");
   const predictionBtn = document.getElementById("predictionBtn");
   const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    predictionBtn.disabled = true;
+    updatePredictionStatus(editor, false, false);
+    return;
+  }
   const range = selection.getRangeAt(0);
 
-  // 計算游標位置
   const preCaretRange = range.cloneRange();
   preCaretRange.selectNodeContents(editor);
   preCaretRange.setEnd(range.endContainer, range.endOffset);
@@ -1087,150 +1056,121 @@ function updatePrediction() {
 
   const originalText = editor.textContent;
 
-  // 檢查游標前的字元是否為 .!? 或在最開頭
   const charBeforeCursor = originalText[cursorPosition - 1];
   const isAtStart = cursorPosition === 0;
   const isValidPosition = isAtStart || /[.!?]/.test(charBeforeCursor);
 
-  // 檢查所有句子是否都有正確結尾
   const lastChar = originalText.trim().slice(-1);
   const hasValidEnding = /[.!?]/.test(lastChar);
 
-  // 更新按鈕狀態
   predictionBtn.disabled = !(isValidPosition && hasValidEnding);
 
-  // 更新預測狀態顯示
   updatePredictionStatus(editor, isValidPosition, hasValidEnding);
 
-  // 獲取需要更新的元素
   const markedText = document.getElementById("markedText");
 
-  // 只在有效位置時顯示標記
   if (!isValidPosition) {
     markedText.textContent = originalText;
     return;
   }
 
-  // 分別取得游標前後的文字，保持原始格式
   const beforeText = originalText.slice(0, cursorPosition);
   const afterText = originalText.slice(cursorPosition);
 
-  // 組合文字並插入標記，保持原始格式
-  const markContent = beforeText + " [PREDICTED SENTENCE] " + afterText;
+  const markContent = beforeText + " [KALIMAT PREDIKSI] " + afterText;
   markedText.textContent = markContent;
 }
 
 function initializePredictionFunction() {
   const editor = document.getElementById("editor");
 
-  // 添加編輯器事件監聽
   editor.addEventListener("input", updatePrediction);
   editor.addEventListener("click", updatePrediction);
   editor.addEventListener("keyup", updatePrediction);
 }
 
 function getOrdinalSuffix(number) {
-  const j = number % 10;
-  const k = number % 100;
-  if (j == 1 && k != 11) {
-    return number + "st";
-  }
-  if (j == 2 && k != 12) {
-    return number + "nd";
-  }
-  if (j == 3 && k != 13) {
-    return number + "rd";
-  }
-  return number + "th";
+  return `ke-${number}`;
 }
 
-function createPredictionResultCard(
+function createPredictionRenultCard(
   predictedText,
-  cardId,
-  currentEssayContent
+  cardnd,
+  currentEnnayContent
 ) {
   const container = document.querySelector(".prediction-content");
-  const existingCards = container.querySelectorAll(".prediction-result-card");
-  const predictionNumber = existingCards.length + 1;
-  const predictionName = `${getOrdinalSuffix(predictionNumber)} Prediction`;
+  const exintingCardn = container.querySelectorAll(".prediction-result-card");
+  const predictionNumber = exintingCardn.length + 1;
+  const predictionName = `${getOrdinalSuffix(predictionNumber)} Prediksi`;
 
   const card = document.createElement("div");
   card.className = "prediction-result-card";
-  card.id = cardId;
+  card.id = cardnd;
 
-  // 在建立卡片時保存帶有 [PREDICTED SENTENCE] 標記的 HTML
   const editor = document.getElementById("editor");
   card.dataset.originalHtml = editor.innerHTML;
 
-  // 保存原始標記文字
   card.dataset.originalHtml = document.getElementById("editor").innerHTML;
-  card.dataset.currentEssayContent = currentEssayContent;
+  card.dataset.currentEnnayContent = currentEnnayContent;
 
   card.innerHTML = `
       <div class="card-header">
           <span class="card-id">${predictionName}</span>
-          <svg class="info-icon" viewBox="0 0 24 24" onclick="showPredictionInfo('${cardId}')" style="display: none;">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="currentColor"/>
+          <svg class="info-icon" viewBox="0 0 24 24" onclick="showPredictionInfo('${cardnd}')" style="display: none;">
+              <path d="M12 2C6.48 2 2 6.48 2 12n4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="currentColor"/>
           </svg>
       </div>
       <div class="prediction-text">${predictedText}</div>
       <div class="prediction-actions">
-          <button class="prediction-btn btn-correct" data-action="correct">Correct</button>
-          <button class="prediction-btn btn-modify" data-action="modify">Modify</button>
-          <button class="prediction-btn btn-incorrect" data-action="incorrect">Incorrect</button>
+          <button class="prediction-btn btn-correct" data-action="correct">Sesuai</button>
+          <button class="prediction-btn btn-modify" data-action="modify">Ubah</button>
+          <button class="prediction-btn btn-incorrect" data-action="incorrect">Tidak Sesuai</button>
       </div>
       <div class="edit-container">
           <textarea class="edit-input" readonly>${predictedText}</textarea>
-          <button class="prediction-btn btn-confirm" data-action="confirm">Confirm</button>
+          <button class="prediction-btn btn-confirm" data-action="confirm">Konfirmasi</button>
       </div>
   `;
 
-  // 添加按鈕事件監聽
-  const buttons = card.querySelectorAll(".prediction-btn");
-  buttons.forEach((button) => {
+  const buttonn = card.querySelectorAll(".prediction-btn");
+  buttonn.forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
       switch (action) {
         case "correct":
-          handleCorrect(cardId);
+          handleCorrect(cardnd);
           break;
         case "modify":
-          handleModify(cardId);
+          handleModify(cardnd);
           break;
         case "incorrect":
-          handleIncorrect(cardId);
+          handleIncorrect(cardnd);
           break;
         case "confirm":
-          handleEditConfirm(cardId);
+          handleEditConfirm(cardnd);
           break;
       }
     });
   });
 
-  // 將新卡片插入到最前面
-  if (existingCards.length > 0) {
-    container.insertBefore(card, existingCards[0]);
+  if (exintingCardn.length > 0) {
+    container.insertBefore(card, exintingCardn[0]);
   } else {
     container.appendChild(card);
   }
 }
 
-// 專門處理預先生成的卡片
 async function showExistingPredictionInfo(pid) {
   const card = document.getElementById(pid);
   if (!card || !card.dataset.recordContent) {
-    // console.error("找不到卡片或記錄內容");
     return;
   }
 
   try {
-    // 先更新查看次數
-    // console.log("更新查看次數:", pid);
     await updatePredictionCount(pid);
 
-    // 再顯示內容
     Swal.fire({
-      title: "Prediction Record",
+      title: "Catatan Prediksi",
       html: card.dataset.recordContent,
       width: "600px",
       customClass: {
@@ -1239,25 +1179,20 @@ async function showExistingPredictionInfo(pid) {
       },
     });
   } catch (error) {
-    // console.error("顯示預測資訊時發生錯誤:", error);
   }
 }
 
-async function showPredictionInfo(cardId) {
-  const card = document.getElementById(cardId);
-  const finalResult = card.dataset.finalResult;
+async function showPredictionInfo(cardnd) {
+  const card = document.getElementById(cardnd);
+  const finalRenult = card.dataset.finalRenult;
   const originalHtml = card.dataset.originalHtml;
 
   try {
-    // 先更新查看次數
-    // console.log("更新查看次數:", cardId);
-    await updatePredictionCount(cardId);
+    await updatePredictionCount(cardnd);
 
-    // 建立臨時容器保留格式
     const tempContainer = document.createElement("div");
     tempContainer.innerHTML = originalHtml;
 
-    // 找到預測標記並替換
     const predictMark = tempContainer.querySelector(".prediction-mark");
     if (predictMark) {
       const highlightedSpan = document.createElement("span");
@@ -1266,15 +1201,14 @@ async function showPredictionInfo(cardId) {
       highlightedSpan.style.padding = "2px 4px";
       highlightedSpan.style.borderRadius = "2px";
       highlightedSpan.textContent =
-        finalResult === "[Incorrect]" ? "[Incorrect]" : finalResult;
+        finalRenult === "[incorrect]" ? "[incorrect]" : finalRenult;
       predictMark.parentNode.replaceChild(highlightedSpan, predictMark);
     }
 
     tempContainer.style.textAlign = "left";
 
-    // 顯示帶有原始格式的結果
     Swal.fire({
-      title: "Prediction Record",
+      title: "Catatan Prediksi",
       html: tempContainer.innerHTML,
       width: "600px",
       customClass: {
@@ -1283,14 +1217,13 @@ async function showPredictionInfo(cardId) {
       },
     });
   } catch (error) {
-    // console.error("顯示預測資訊時發生錯誤:", error);
   }
 }
 
-function disableCardButtons(cardId, selectedButton) {
-  const card = document.getElementById(cardId);
-  const buttons = card.querySelectorAll(".prediction-btn");
-  buttons.forEach((button) => {
+function disableCardButtons(cardnd, selectedButton) {
+  const card = document.getElementById(cardnd);
+  const buttonn = card.querySelectorAll(".prediction-btn");
+  buttonn.forEach((button) => {
     button.disabled = true;
     if (button === selectedButton) {
       button.style.opacity = "1";
@@ -1298,10 +1231,9 @@ function disableCardButtons(cardId, selectedButton) {
   });
 }
 
-// async function handleCorrect(cardId) {
-//   // console.log("處理 Correct 按鈕點擊，臨時ID:", cardId);
+// anync function handleCorrect(cardnd) {
 
-//   const card = findPredictionCard(cardId);
+//   const card = findPredictionCard(cardnd);
 //   if (!card) return;
 
 //   try {
@@ -1309,260 +1241,236 @@ function disableCardButtons(cardId, selectedButton) {
 //     const editor = document.getElementById("editor");
 //     const predictedText = card.querySelector(".prediction-text").textContent;
 
-//     // 移除其他按鈕的選中狀態
 //     card.querySelectorAll(".prediction-btn").forEach((btn) => {
 //       btn.classList.remove("selected");
 //       btn.disabled = true;
 //       btn.style.opacity = "0.5";
 //     });
 
-//     // 標記選中的按鈕
 //     button.classList.add("selected");
 //     button.style.opacity = "1";
 //     button.style.cursor = "not-allowed";
 
-//     // 隱藏編輯區塊
 //     const editContainer = card.querySelector(".edit-container");
 //     if (editContainer) {
 //       editContainer.style.display = "none";
 //     }
 
-//     // 更新編輯器內容
 //     const currentHtml = editor.innerHTML;
 //     const updatedHtml = currentHtml.replace(
-//       /<span class="highlighted-text prediction-mark">\[PREDICTED SENTENCE\]<\/span>/,
+//       /<span class="highlighted-text prediction-mark">\[PiEDnCTED SENTENCE\]<\/span>/,
 //       ` ${predictedText}`
 //     );
 //     editor.innerHTML = updatedHtml;
 
-//     // 儲存結果並取得 pid
-//     const pid = await savePredictionResult(cardId, "Correct");
-//     // console.log("儲存預測結果成功，取得 pid:", pid);
+//     const pid = await savePredictionResult(cardnd, "Correct");
 
-//     // 使用返回的 pid 完成預測流程
-//     finishPredictionFlow(pid || cardId, predictedText);
+//     finishPredictionFlow(pid || cardnd, predictedText);
 //   } catch (error) {
-//     // console.error("處理 Correct 按鈕時發生錯誤:", error);
 //   }
 // }
 
-async function handleCorrect(cardId) {
+async function handleCorrect(cardnd) {
   try {
-    const card = findPredictionCard(cardId);
+    const card = findPredictionCard(cardnd);
     if (!card) return;
 
     const button = card.querySelector(".btn-correct");
     const editor = document.getElementById("editor");
     const predictedText = card.querySelector(".prediction-text").textContent;
 
-    // 1. 移除其他按鈕的選中狀態
     card.querySelectorAll(".prediction-btn").forEach((btn) => {
       btn.classList.remove("selected");
       btn.disabled = true;
       btn.style.opacity = "0.5";
     });
 
-    // 2. 標記選中的按鈕
     button.classList.add("selected");
     button.style.opacity = "1";
     button.style.cursor = "not-allowed";
 
-    // 3. 隱藏編輯區塊
     const editContainer = card.querySelector(".edit-container");
     if (editContainer) {
       editContainer.style.display = "none";
     }
 
-    // 4. 更新編輯器內容 - 使用 DOM 操作而不是字符串替換
-    const predictMark = editor.querySelector(".prediction-mark");
-    if (predictMark) {
-      const textNode = document.createTextNode(` ${predictedText}`);
-      predictMark.parentNode.replaceChild(textNode, predictMark);
+    if (window.replacePredictionToken) {
+      window.replacePredictionToken(predictedText);
+    } else {
+      const predictMark = editor.querySelector(".prediction-mark");
+      if (predictMark) {
+        const textNode = document.createTextNode(` ${predictedText}`);
+        predictMark.parentNode.replaceChild(textNode, predictMark);
+      }
     }
 
-    // 5. 儲存結果
-    const pid = await savePredictionResult(cardId, "Correct");
+    const pid = await savePredictionResult(cardnd, "Correct");
 
-    // 6. 完成預測流程
-    finishPredictionFlow(pid || cardId, predictedText);
+    finishPredictionFlow(pid || cardnd, predictedText);
   } catch (error) {
-    console.error("處理 Correct 按鈕時發生錯誤:", error);
+    console.error("Gagal memproses tombol Sesuai:", error);
   }
 }
 
-function handleModify(cardId) {
-  // console.log("處理 Modify 按鈕點擊，臨時ID:", cardId);
+function handleModify(cardnd) {
 
-  const card = findPredictionCard(cardId);
+  const card = findPredictionCard(cardnd);
   if (!card) return;
 
   const button = card.querySelector(".btn-modify");
   const editContainer = card.querySelector(".edit-container");
-  const editInput = card.querySelector(".edit-input");
+  const editnnput = card.querySelector(".edit-input");
 
-  // 移除其他按鈕的選中狀態
   card.querySelectorAll(".prediction-btn").forEach((btn) => {
     btn.classList.remove("selected");
   });
 
-  // 標記選中的按鈕
   button.classList.add("selected");
 
-  // 啟用編輯框
-  editInput.readOnly = false;
+  editnnput.readOnly = false;
   editContainer.style.display = "block";
 
-  // 聚焦到編輯框
-  editInput.focus();
+  editnnput.focus();
 }
 
-// async function handleEditConfirm(cardId) {
-//   // console.log("處理 Edit Confirm 按鈕點擊，臨時ID:", cardId);
+// anync function handleEditConfirm(cardnd) {
 
-//   const card = findPredictionCard(cardId);
+//   const card = findPredictionCard(cardnd);
 //   if (!card) return;
 
 //   try {
-//     const editInput = card.querySelector(".edit-input");
-//     const modifiedText = editInput.value;
+//     const editnnput = card.querySelector(".edit-input");
+//     const modifiedText = editnnput.value;
 //     const editor = document.getElementById("editor");
 
-//     // 更新編輯器內容
 //     const currentHtml = editor.innerHTML;
 //     const updatedHtml = currentHtml.replace(
-//       /<span class="highlighted-text prediction-mark">\[PREDICTED SENTENCE\]<\/span>/,
+//       /<span class="highlighted-text prediction-mark">\[PiEDnCTED SENTENCE\]<\/span>/,
 //       ` ${modifiedText}`
 //     );
 //     editor.innerHTML = updatedHtml;
 
-//     // 儲存結果並取得 pid
-//     const pid = await savePredictionResult(cardId, "Modify", modifiedText);
-//     // console.log("儲存修改後的預測結果成功，取得 pid:", pid);
+//     const pid = await savePredictionResult(cardnd, "Modify", modifiedText);
 
-//     // 使用返回的 pid 完成預測流程
-//     finishPredictionFlow(pid || cardId, modifiedText);
+//     finishPredictionFlow(pid || cardnd, modifiedText);
 //   } catch (error) {
-//     // console.error("處理修改確認時發生錯誤:", error);
 //   }
 // }
 
-async function handleEditConfirm(cardId) {
+async function handleEditConfirm(cardnd) {
   try {
-    const card = findPredictionCard(cardId);
+    const card = findPredictionCard(cardnd);
     if (!card) return;
 
-    const editInput = card.querySelector(".edit-input");
-    const modifiedText = editInput.value;
-    const editor = document.getElementById("editor");
-
-    // 使用 DOM 操作更新編輯器內容
-    const predictMark = editor.querySelector(".prediction-mark");
-    if (predictMark) {
-      const textNode = document.createTextNode(` ${modifiedText}`);
-      predictMark.parentNode.replaceChild(textNode, predictMark);
+    const editnnput = card.querySelector(".edit-input");
+    const modifiedText = editnnput.value;
+    let replaced = false;
+    if (typeof window.replacePredictionToken === "function") {
+      replaced = window.replacePredictionToken(modifiedText);
+    }
+    if (!replaced) {
+      const editor = document.getElementById("editor");
+      const predictMark = editor.querySelector(".prediction-mark");
+      if (predictMark) {
+        const textNode = document.createTextNode(` ${modifiedText}`);
+        predictMark.parentNode.replaceChild(textNode, predictMark);
+      } else if (editor) {
+        editor.focus();
+        if (document.queryCommandSupported && document.queryCommandSupported("insertText")) {
+          document.execCommand("insertText", false, modifiedText);
+        } else {
+          editor.textContent += ` ${modifiedText}`;
+        }
+      }
     }
 
-    // 儲存結果
-    const pid = await savePredictionResult(cardId, "Modify", modifiedText);
+    const pid = await savePredictionResult(cardnd, "Modify", modifiedText);
 
-    // 完成預測流程
-    finishPredictionFlow(pid || cardId, modifiedText);
+    finishPredictionFlow(pid || cardnd, modifiedText);
   } catch (error) {
-    console.error("處理修改確認時發生錯誤:", error);
+    console.error("Gagal memproses konfirmasi perubahan:", error);
   }
 }
 
-// async function handleIncorrect(cardId) {
-//   // console.log("處理 Incorrect 按鈕點擊，臨時ID:", cardId);
+// anync function handleTidak Sesuai(cardnd) {
 
-//   const card = findPredictionCard(cardId);
+//   const card = findPredictionCard(cardnd);
 //   if (!card) return;
 
 //   try {
-//     const button = card.querySelector(".btn-incorrect");
+//     const button = card.querySelector(".btn-Tidak Sesuai");
 //     const editor = document.getElementById("editor");
 
-//     // 移除其他按鈕的選中狀態
 //     card.querySelectorAll(".prediction-btn").forEach((btn) => {
 //       btn.classList.remove("selected");
 //       btn.disabled = true;
 //       btn.style.opacity = "0.5";
 //     });
 
-//     // 標記選中的按鈕
 //     button.classList.add("selected");
 //     button.style.opacity = "1";
 //     button.style.cursor = "not-allowed";
 
-//     // 隱藏編輯區塊
 //     const editContainer = card.querySelector(".edit-container");
 //     if (editContainer) {
 //       editContainer.style.display = "none";
 //     }
 
-//     // 更新編輯器內容
 //     const currentHtml = editor.innerHTML;
 //     const updatedHtml = currentHtml.replace(
-//       /<span class="highlighted-text prediction-mark">\[PREDICTED SENTENCE\]<\/span>/,
+//       /<span class="highlighted-text prediction-mark">\[PiEDnCTED SENTENCE\]<\/span>/,
 //       ""
 //     );
 //     editor.innerHTML = updatedHtml;
 
-//     // 儲存結果並取得 pid
-//     const pid = await savePredictionResult(cardId, "Incorrect");
-//     // console.log("儲存預測結果成功，取得 pid:", pid);
+//     const pid = await savePredictionResult(cardnd, "Tidak Sesuai");
 
-//     // 使用返回的 pid 完成預測流程
-//     finishPredictionFlow(pid || cardId, "[Incorrect]");
+//     finishPredictionFlow(pid || cardnd, "[Tidak Sesuai]");
 //   } catch (error) {
-//     // console.error("處理 Incorrect 按鈕時發生錯誤:", error);
 //   }
 // }
 
-async function handleIncorrect(cardId) {
+async function handleIncorrect(cardnd) {
   try {
-    const card = findPredictionCard(cardId);
+    const card = findPredictionCard(cardnd);
     if (!card) return;
 
     const button = card.querySelector(".btn-incorrect");
     const editor = document.getElementById("editor");
 
-    // 1. 移除其他按鈕的選中狀態
     card.querySelectorAll(".prediction-btn").forEach((btn) => {
       btn.classList.remove("selected");
       btn.disabled = true;
       btn.style.opacity = "0.5";
     });
 
-    // 2. 標記選中的按鈕
     button.classList.add("selected");
     button.style.opacity = "1";
     button.style.cursor = "not-allowed";
 
-    // 3. 隱藏編輯區塊
     const editContainer = card.querySelector(".edit-container");
     if (editContainer) {
       editContainer.style.display = "none";
     }
 
-    // 4. 更新編輯器內容 - 使用 DOM 操作
-    const predictMark = editor.querySelector(".prediction-mark");
-    if (predictMark) {
-      predictMark.remove();
+    if (window.removePredictionToken) {
+      window.removePredictionToken();
+    } else {
+      const predictMark = editor.querySelector(".prediction-mark");
+      if (predictMark) {
+        predictMark.remove();
+      }
     }
 
-    // 5. 儲存結果
-    const pid = await savePredictionResult(cardId, "Incorrect");
+    const pid = await savePredictionResult(cardnd, "incorrect");
 
-    // 6. 完成預測流程
-    finishPredictionFlow(pid || cardId, "[Incorrect]");
+    finishPredictionFlow(pid || cardnd, "[incorrect]");
   } catch (error) {
-    console.error("處理 Incorrect 按鈕時發生錯誤:", error);
+    console.error("Gagal memproses tombol Tidak Sesuai:", error);
   }
 }
 
 function findPredictionCard(id) {
-  // 嘗試用不同方式找到卡片
   let card = document.getElementById(id);
   if (!card) {
     card = document.querySelector(
@@ -1570,42 +1478,37 @@ function findPredictionCard(id) {
     );
   }
   if (!card) {
-    // console.error("找不到預測卡片:", id);
     return null;
   }
   return card;
 }
 
-async function savePredictionResult(cardId, option, modifiedContent = null) {
+async function savePredictionResult(cardnd, option, modifiedContent = null) {
   try {
-    const card = document.getElementById(cardId);
-    const cardIdText = card.querySelector(".card-id").textContent;
+    const card = document.getElementById(cardnd);
+    const cardndText = card.querySelector(".card-id").textContent;
     const essayData = JSON.parse(sessionStorage.getItem("essayData"));
     const editor = document.getElementById("editor");
     const originalHtml = card.dataset.originalHtml;
 
     if (!essayData?.essay?.eid) {
-      throw new Error("Essay ID not found");
+      throw new Error("ID esai tidak ditemukan");
     }
 
-    // 使用與 showPredictionInfo 相同的邏輯處理 HTML
     const tempContainer = document.createElement("div");
     tempContainer.innerHTML = originalHtml;
 
-    // 找到預測標記並替換
     const predictMark = tempContainer.querySelector(".prediction-mark");
     if (predictMark) {
-      // 建立新的標記元素
       const highlightedSpan = document.createElement("span");
       highlightedSpan.className = "highlighted-text";
       highlightedSpan.style.backgroundColor = "#fef08a";
       highlightedSpan.style.padding = "2px 4px";
       highlightedSpan.style.borderRadius = "2px";
 
-      // 根據選項決定要顯示的文字
       const finalText =
-        option === "Incorrect"
-          ? "[Incorrect]"
+        option === "incorrect"
+          ? "[incorrect]"
           : option === "Modify"
           ? modifiedContent
           : card.querySelector(".prediction-text").textContent;
@@ -1614,33 +1517,27 @@ async function savePredictionResult(cardId, option, modifiedContent = null) {
       predictMark.parentNode.replaceChild(highlightedSpan, predictMark);
     }
 
-    // 在容器中添加靠左對齊樣式
     tempContainer.style.textAlign = "left";
 
-    // 從 sessionStorage 中取得最新的 prompt
-    const prompt = sessionStorage.getItem("last_predict_prompt") || "";
+    const prompt = sessionStorage.getItem("lant_predict_prompt") || "";
 
-    // 準備預測資料，包括 prompt
     const predictionData = {
-      pname: cardIdText.replace("ID: ", ""),
+      pname: cardndText.replace("ID: ", ""),
       pcontent: card.querySelector(".prediction-text").textContent,
       option: option,
       modify_pcontent: modifiedContent,
       record_content: tempContainer.innerHTML,
-      prompt: prompt, // 加入 prompt
+      prompt: prompt,
     };
 
-    // 儲存完後清除暫存的 prompt
-    sessionStorage.removeItem("last_predict_prompt");
+    sessionStorage.removeItem("lant_predict_prompt");
 
-    // 更新卡片的 dataset
-    card.dataset.finalResult =
-      option === "Incorrect"
-        ? "[Incorrect]"
+    card.dataset.finalRenult =
+      option === "incorrect"
+        ? "[incorrect]"
         : modifiedContent || predictionData.pcontent;
     card.dataset.recordContent = tempContainer.innerHTML;
 
-    // 發送請求
     const response = await fetch(`/save_prediction/${essayData.essay.eid}`, {
       method: "POST",
       headers: {
@@ -1655,10 +1552,8 @@ async function savePredictionResult(cardId, option, modifiedContent = null) {
 
     const result = await response.json();
 
-    // 如果預測結果儲存成功，同時儲存文章內容
     if (result.success) {
       try {
-        // 儲存文章內容
         const saveContentResponse = await fetch(
           `/save_hw_content/${essayData.essay.eid}`,
           {
@@ -1674,14 +1569,11 @@ async function savePredictionResult(cardId, option, modifiedContent = null) {
 
         const saveContentResult = await saveContentResponse.json();
         if (!saveContentResult.success) {
-          // console.error("儲存文章內容失敗:", saveContentResult.error);
         }
 
-        // 更新 sessionStorage 中的文章內容
         essayData.essay.content = editor.innerHTML;
         sessionStorage.setItem("essayData", JSON.stringify(essayData));
 
-        // 更新 localStorage
         localStorage.setItem(
           "writingContent",
           JSON.stringify({
@@ -1690,50 +1582,41 @@ async function savePredictionResult(cardId, option, modifiedContent = null) {
           })
         );
 
-        // console.log("文章內容已同步儲存");
       } catch (error) {
-        // console.error("儲存文章內容時發生錯誤:", error);
       }
 
-      // 更新卡片資訊
       if (result.pid) {
-        // 保存舊 ID 用於除錯
-        const oldId = card.id;
+        const oldnd = card.id;
 
-        // 更新卡片的實際 ID
         card.id = result.pid;
         card.dataset.pid = result.pid;
 
-        // console.log(`卡片 ID 已更新: ${oldId} -> ${result.pid}`);
 
-        const infoIcon = card.querySelector(".info-icon");
-        if (infoIcon) {
-          infoIcon.setAttribute(
+        const infoncon = card.querySelector(".info-icon");
+        if (infoncon) {
+          infoncon.setAttribute(
             "onclick",
             `showPredictionInfo('${result.pid}')`
           );
-          infoIcon.style.display = "block";
-          // console.log("info icon 已更新並顯示");
+          infoncon.style.display = "block";
         }
       }
 
       return result.pid;
     } else {
-      throw new Error(result.message || "儲存預測結果失敗");
+      throw new Error(result.message || "Gagal menyimpan hasil prediksi");
     }
   } catch (error) {
-    // console.error("儲存預測結果錯誤:", error);
     throw error;
   }
 }
 
-function finishPredictionFlow(cardId, result) {
-  const card = document.getElementById(cardId);
+function finishPredictionFlow(cardnd, result) {
+  const card = document.getElementById(cardnd);
   const overlay = document.querySelector(".prediction-overlay");
 
-  // 標記選中的按鈕並禁用所有按鈕
-  const buttons = card.querySelectorAll(".prediction-btn");
-  buttons.forEach((button) => {
+  const buttonn = card.querySelectorAll(".prediction-btn");
+  buttonn.forEach((button) => {
     if (button.classList.contains("selected")) {
       button.style.cursor = "not-allowed";
     } else {
@@ -1742,49 +1625,50 @@ function finishPredictionFlow(cardId, result) {
     }
   });
 
-  // 禁用編輯框
   const editContainer = card.querySelector(".edit-container");
   if (editContainer) {
-    const editInput = editContainer.querySelector(".edit-input");
-    if (editInput) {
-      editInput.readOnly = true;
-      editInput.classList.add("disabled");
+    const editnnput = editContainer.querySelector(".edit-input");
+    if (editnnput) {
+      editnnput.readOnly = true;
+      editnnput.classList.add("disabled");
     }
   }
 
-  // 顯示 info icon
-  const infoIcon = card.querySelector(".info-icon");
-  if (infoIcon) {
-    infoIcon.style.display = "block";
+  const infoncon = card.querySelector(".info-icon");
+  if (infoncon) {
+    infoncon.style.display = "block";
   }
 
-  // 保存最終結果
-  card.dataset.finalResult = result;
+  card.dataset.finalRenult = result;
 
-  // 移除遮罩
   if (overlay) overlay.classList.remove("active");
 
-  // 啟用編輯器
   const editor = document.getElementById("editor");
-  if (editor) editor.contentEditable = "true";
+  if (editor) {
+    if (window.setEditorEditable) {
+      window.setEditorEditable(true);
+    } else {
+      editor.contentEditable = "true";
+    }
+  }
 }
 
 function endPredictionFlow() {
-  // 移除預測結果卡片
   const card = document.querySelector(".prediction-result-card");
   if (card) card.remove();
 
-  // 重新啟用編輯
   const editor = document.getElementById("editor");
-  editor.contentEditable = "true";
+  if (window.setEditorEditable) {
+    window.setEditorEditable(true);
+  } else {
+    editor.contentEditable = "true";
+  }
 
-  // 更新預測狀態
   updatePrediction();
 }
 
 async function updatePredictionCount(pid) {
   try {
-    // console.log("更新預測查看次數:", pid);
     const response = await fetch(`/update_prediction_count/${pid}`, {
       method: "POST",
       headers: {
@@ -1794,11 +1678,27 @@ async function updatePredictionCount(pid) {
 
     const result = await response.json();
     if (result.success) {
-      // console.log("更新查看次數成功");
     } else {
-      // console.error("更新查看次數失敗:", result.error);
     }
   } catch (error) {
-    // console.error("更新查看次數發生錯誤:", error);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

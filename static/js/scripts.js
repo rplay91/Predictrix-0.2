@@ -1,26 +1,30 @@
-/*!
+﻿/*!
  * Start Bootstrap - SB Admin v7.0.7 (https://startbootstrap.com/template/sb-admin)
  * Copyright 2013-2023 Start Bootstrap
  * Licensed under MIT (https://github.com/StartBootstrap/startbootstrap-sb-admin/blob/master/LICENSE)
  */
 
 window.addEventListener("DOMContentLoaded", (event) => {
-  // 生成頁面基本結構
   const generateLayout = () => {
     const body = document.body;
     body.className = "sb-nav-fixed";
 
-    // 生成上半部分（導航欄）
     const topSection = `
       <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-        <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!">
-          <i class="fas fa-bars"></i>
-        </button>
-        <a class="navbar-brand ps-3" href="/">Predictrix</a>
+        <div class="d-flex align-items-center">
+          <button class="btn btn-link btn-sm order-1 order-lg-0 me-2" id="sidebarToggle" href="#!">
+            <i class="fas fa-bars"></i>
+          </button>
+          <a class="navbar-brand ps-1" href="/">Predictrix</a>
+        </div>
+        <div class="ms-auto me-3 d-flex align-items-center">
+          <button class="btn btn-outline-light btn-sm" id="logoutBtn" type="button">
+            <i class="fas fa-sign-out-alt me-1"></i>Logout
+          </button>
+        </div>
       </nav>
     `;
 
-    // 生成下半部分（側邊欄和主要內容區）
     const bottomSection = `
       <div id="layoutSidenav">
         <div id="layoutSidenav_nav">
@@ -33,9 +37,9 @@ window.addEventListener("DOMContentLoaded", (event) => {
                   <div class="sb-nav-link-icon">
                     <i class="fas fa-history"></i>
                   </div>
-                  Writing History
+                  Beranda
                 </a>
-                <div class="sb-sidenav-menu-heading">Assignment</div>
+                <div class="sb-sidenav-menu-heading">Tugas</div>
                 <a class="nav-link" href="/test1_writing">
                   <div class="sb-nav-link-icon">
                     <i class="fas fa-columns"></i>
@@ -46,13 +50,13 @@ window.addEventListener("DOMContentLoaded", (event) => {
                   <div class="sb-nav-link-icon">
                     <i class="fas fa-book-open"></i>
                   </div>
-                  Homework 1
+                  Tugas 1
                 </a>
                 <a class="nav-link" href="/hw2_writing">
                   <div class="sb-nav-link-icon">
                     <i class="fas fa-book-open"></i>
                   </div>
-                  Homework 2
+                  Tugas 2
                 </a>
                 <a class="nav-link" href="/test2_writing">
                   <div class="sb-nav-link-icon">
@@ -61,26 +65,26 @@ window.addEventListener("DOMContentLoaded", (event) => {
                   Post-Test
                 </a>
 
-                <div class="sb-sidenav-menu-heading">Guide</div>
+                <div class="sb-sidenav-menu-heading">Panduan</div>
                 <a class="nav-link" href="/hw_writing_setup_instruct">
                   <div class="sb-nav-link-icon">
                     <i class="fas fa-chalkboard-teacher"></i>
                   </div>
-                   How to upload picture
+                   Cara mengunggah gambar
                 </a>
                 <a class="nav-link" href="/hw_writing_instruct">
                   <div class="sb-nav-link-icon">
                     <i class="fas fa-chalkboard-teacher"></i>
                   </div>
-                  How to write and submit your homework
+                  Cara menulis dan mengumpulkan tugas
                 </a>             
 
-                <div class="sb-sidenav-menu-heading">Goodbye</div>
+                <div class="sb-sidenav-menu-heading">Keluar</div>
                 <a class="nav-link" href="/login" onclick="handleSignOut(event)">
                   <div class="sb-nav-link-icon">
                     <i class="fas fa-power-off"></i>
                   </div>
-                  Sign Out
+                  Keluar
                 </a>
               </div>
             </div>
@@ -88,20 +92,17 @@ window.addEventListener("DOMContentLoaded", (event) => {
         </div>
         <div id="layoutSidenav_content">
           <main>
-            <!-- 內容將由 index.js 動態生成 -->
+            <!-- Konten akan dibuat secara dinamis oleh index.js -->
           </main>
         </div>
       </div>
     `;
 
-    // 將結構插入到 body
     body.innerHTML = topSection + bottomSection;
   };
 
-  // 生成布局
   generateLayout();
 
-  // 側邊欄切換功能
   const sidebarToggle = document.body.querySelector("#sidebarToggle");
   if (sidebarToggle) {
     sidebarToggle.addEventListener("click", (event) => {
@@ -113,10 +114,20 @@ window.addEventListener("DOMContentLoaded", (event) => {
       );
     });
   }
+
+  const logoutBtn = document.body.querySelector("#logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      handleSignOut(event);
+      window.location.href = "/login";
+    });
+  }
 });
 
-// 在檔案底部加入登出處理函數
 function handleSignOut(event) {
-  // 清除所有 sessionStorage
   sessionStorage.clear();
 }
+
+
+
