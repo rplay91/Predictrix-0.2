@@ -100,6 +100,9 @@
 
         if (result.success) {
           sessionStorage.setItem("username", result.data.username);
+          if (result.access_token) {
+            sessionStorage.setItem("authToken", result.access_token);
+          }
 
           if (result.isTeacher) {
             console.log("Login guru berhasil");

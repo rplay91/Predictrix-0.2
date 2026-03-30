@@ -1,13 +1,6 @@
 // Manual rich text editor helper (contenteditable + toolbar)
 (function () {
-  const DEFAULT_TEMPLATE = `
-    <h2>Pengenalan</h2>
-    <p>Tuliskan paragraf pengantar untuk memperkenalkan topik.</p>
-    <h2>Isi</h2>
-    <p>Jelaskan ide utama, detail pendukung, dan contoh yang relevan.</p>
-    <h2>Kesimpulan</h2>
-    <p>Rangkum poin penting dan berikan penutup singkat.</p>
-  `;
+  const PLACEHOLDER_TEXT = "";
 
   const PREDICTION_TOKEN = "[KALIMAT PREDIKSI]";
   const ALT_PREDICTION_TOKEN = "[PREDsCTED SENTENCE]";
@@ -21,6 +14,8 @@
   ];
 
   const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32];
+  const PLACEHOLDER_TEXT_COMPACT = "";
+  const HEADINGS_ONLY_TEXT = "";
 
   function escapeHtml(value = "") {
     return String(value)
@@ -32,27 +27,6 @@
   }
 
   function normalizeInitialContent(html, text) {
-    const hasSections =
-      /<h2[^>]*>\s*Pengenalan/i.test(html) &&
-      /<h2[^>]*>\s*Isi/i.test(html) &&
-      /<h2[^>]*>\s*Kesimpulan/i.test(html);
-
-    if (!text) {
-      return DEFAULT_TEMPLATE.trim();
-    }
-
-    if (!hasSections) {
-      const safeText = escapeHtml(text);
-      return `
-        <h2>Pengenalan</h2>
-        <p>Tuliskan paragraf pengantar untuk memperkenalkan topik.</p>
-        <h2>Isi</h2>
-        <p>${safeText}</p>
-        <h2>Kesimpulan</h2>
-        <p>Rangkum poin penting dan berikan penutup singkat.</p>
-      `.trim();
-    }
-
     return html;
   }
 
@@ -60,13 +34,16 @@
     return document.getElementById("editor");
   }
 
+  function updatePlaceholderState(editor) {
+    editor.classList.remove("is-empty");
+  }
+
+  function isOnlyPlaceholder(editor) {
+    return !(editor && (editor.textContent || "").trim());
+  }
+
   function ensureDefaultContent(editor) {
-    const rawText = (editor.textContent || "").trim();
-    const html = editor.innerHTML || "";
-    const normalized = normalizeInitialContent(html, rawText);
-    if (normalized !== html) {
-      editor.innerHTML = normalized;
-    }
+    updatePlaceholderState(editor);
   }
 
   function exec(command, value = null) {
@@ -243,7 +220,17 @@
 
   window.setEditorHtml = function setEditorHtml(html) {
     const root = getEditor();
-    if (root) root.innerHTML = html || "";
+    if (root) {
+      root.innerHTML = html || "";
+      updatePlaceholderState(root);
+    }
+  };
+
+  window.getEditorContentForSave = function getEditorContentForSave() {
+    const editor = getEditor();
+    if (!editor) return "";
+    if (isOnlyPlaceholder(editor)) return "";
+    return editor.innerHTML || "";
   };
 
   window.setEditorEditable = function setEditorEditable(isEditable) {
@@ -297,6 +284,9 @@
       editor.setAttribute("contenteditable", "true");
       createToolbar(editor);
       ensureDefaultContent(editor);
+      editor.addEventListener("input", () => updatePlaceholderState(editor));
+      editor.addEventListener("focus", () => updatePlaceholderState(editor));
+      editor.addEventListener("blur", () => updatePlaceholderState(editor));
       editor.dataset.manualEditorInitialized = "true";
     } catch (error) {
       // console.error("Manual editor init failed:", error);

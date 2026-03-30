@@ -1,3 +1,4 @@
+import os
 # uvicorn main:app --host 0.0.0.0 --port 8000
 import uvicorn
 import base64
@@ -11,6 +12,9 @@ from fastapi.responses import JSONResponse
 from fastapi import Request
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+from auth import create_access_token, verify_access_token
 
 # python function
 from login_api import verify_login, verify_teacher_login, register_student
@@ -21,15 +25,65 @@ from hw_setup_api import analyze_image, initialize_homework1_essay, initialize_h
 from predict_api import get_predict_sentence, run_feedback_loop
 from show_essay_api import update_review_count
 from teacher_index_api import get_all_essay_list
+from behavior_log_api import create_task_session, close_task_session
 
 
 app = FastAPI()
 
-# Serve static files from the local directory
+frontend_origins = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ALLOW_ORIGINS", "").split(",")
+    if origin.strip()
+]
+if frontend_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=frontend_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# Serve static files from the local directory (optional for frontend split)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Configure Jinja2 template rendering
+# Configure Jinja2 template rendering (optional for frontend split)
 templates = Jinja2Templates(directory="templates")
+
+AUTH_ENABLED = os.environ.get("AUTH_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+AUTH_EXEMPT_PATHS = {
+    "/verify_login",
+    "/register",
+    "/openapi.json",
+    "/docs",
+    "/docs/oauth2-redirect",
+}
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if (
+        not AUTH_ENABLED
+        or request.method == "OPTIONS"
+        or path in AUTH_EXEMPT_PATHS
+        or path.startswith("/static")
+    ):
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(content={"success": False, "error": "Missing token."}, status_code=401)
+
+    token = auth_header.split(" ", 1)[1].strip()
+    try:
+        payload = verify_access_token(token)
+    except Exception:
+        return JSONResponse(content={"success": False, "error": "Invalid token."}, status_code=401)
+
+    request.state.user = payload
+    return await call_next(request)
 
 # Public page routes
 @app.get("/", response_class=HTMLResponse)
@@ -109,9 +163,18 @@ async def api_login(login_data: LoginData):
     teacher_result = verify_teacher_login(login_data.account, login_data.password)
     
     if teacher_result.get("success"):
+        token = create_access_token(
+            {
+                "role": "teacher",
+                "tid": teacher_result.get("data", {}).get("tid"),
+                "username": teacher_result.get("data", {}).get("username"),
+            }
+        )
         return JSONResponse(content={
             "success": True,
             "isTeacher": True,
+            "access_token": token,
+            "token_type": "bearer",
             "data": {
                 "tid": teacher_result.get("data", {}).get("tid"),
                 "username": teacher_result.get("data", {}).get("username")
@@ -121,9 +184,18 @@ async def api_login(login_data: LoginData):
     # Fallback to student login verification
     student_result = verify_login(login_data.account, login_data.password)
     if student_result.get("success"):
+        token = create_access_token(
+            {
+                "role": "student",
+                "sid": student_result.get("data", {}).get("sid"),
+                "username": student_result.get("data", {}).get("username"),
+            }
+        )
         return JSONResponse(content={
             "success": True,
             "isTeacher": False,
+            "access_token": token,
+            "token_type": "bearer",
             "data": {
                 "sid": student_result.get("data", {}).get("sid"),
                 "username": student_result.get("data", {}).get("username")
@@ -326,6 +398,16 @@ class FeedbackRequest(BaseModel):
     user_judgment: str
     user_original_sentence: str | None = None
 
+class TaskSessionStart(BaseModel):
+    sid: str
+    eid: int | None = None
+    task_type: str
+    page_url: str | None = None
+    user_agent: str | None = None
+
+class TaskSessionEnd(BaseModel):
+    session_id: int
+
 
 # predicting sentences 
 @app.post("/predict_sentence")
@@ -374,6 +456,32 @@ async def api_predict_feedback(feedback_request: FeedbackRequest):
             content={"success": False, "error": str(e)},
             status_code=500
         )
+
+@app.post("/track_task_session/start")
+async def api_track_task_session_start(payload: TaskSessionStart):
+    session_id = create_task_session(
+        sid=payload.sid,
+        eid=payload.eid,
+        task_type=payload.task_type,
+        page_url=payload.page_url,
+        user_agent=payload.user_agent,
+    )
+    if session_id is None:
+        return JSONResponse(
+            content={"success": False, "error": "Failed to create session."},
+            status_code=500
+        )
+    return JSONResponse(content={"success": True, "session_id": session_id})
+
+@app.post("/track_task_session/end")
+async def api_track_task_session_end(payload: TaskSessionEnd):
+    success = close_task_session(payload.session_id)
+    if not success:
+        return JSONResponse(
+            content={"success": False, "error": "Session not found or already closed."},
+            status_code=404
+        )
+    return JSONResponse(content={"success": True})
 
 
 

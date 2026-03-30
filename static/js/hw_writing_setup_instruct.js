@@ -1,4 +1,4 @@
-﻿// Global variables
+// Global variables
 let imageCount = 0;
 
 // Configuration
@@ -326,22 +326,18 @@ document.addEventListener("DOMContentLoaded", async function () {
   };
 
   try {
-    await waitForScripts();
-
     await generateSetupPage();
 
-    await new Promise((resolve) => {
-      const checkDriver = () => {
-        if (window.driver) {
-          resolve();
-        } else {
-          setTimeout(checkDriver, 100);
-        }
-      };
-      checkDriver();
-    });
+    await waitForScripts();
 
-    await initializeDriver();
+    await new Promise((resolve) => {const checkDriver = () => {
+       if (window.driver) {resolve();} else {
+               setTimeout(checkDriver, 100);
+              }
+                 };
+                 checkDriver();
+                });
+                await initializeDriver();
   } catch (error) {
     console.error("Failed to initialize page:", error);
   }
@@ -503,7 +499,7 @@ function addKeywordFromInput(index) {
       document
         .getElementById(`keywordsChips_${index}`)
         .getElementsByClassName("keyword-chip")
-    ).map((chip) => chip.textContent.replace("×", "").trim());
+    ).map((chip) => chip.textContent.replace("�", "").trim());
 
     if (!existingKeywords.includes(keyword)) {
       addKeywordChip(keyword, index);
@@ -660,7 +656,7 @@ function addKeywordChip(keyword, index) {
   chip.className = "keyword-chip";
   chip.innerHTML = `
     ${keyword}
-    <span class="chip-delete" onclick="this.parentElement.remove()">×</span>
+    <span class="chip-delete" onclick="this.parentElement.remove()">�</span>
   `;
   document.getElementById(`keywordsChips_${index}`).appendChild(chip);
 }
@@ -729,7 +725,7 @@ async function validateAndProceed() {
         document
           .getElementById(`keywordsChips_${index}`)
           ?.getElementsByClassName("keyword-chip") || []
-      ).map((el) => el.textContent.trim().replace("×", "")),
+      ).map((el) => el.textContent.trim().replace("�", "")),
     })),
     eid: "default_essay_id",
   };
@@ -782,6 +778,7 @@ async function validateAndProceed() {
     }
   }
 }
+
 
 
 

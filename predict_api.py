@@ -18,6 +18,7 @@ from sentence_transformers import SentenceTransformer
 from graphRAG.global_search import search_graph
 
 from api_config import GPT_API_KEY
+from behavior_log_api import log_prompt_snapshot, log_debug_event
 client = OpenAI(api_key=GPT_API_KEY)
 _OPENAI_PARSE = client.beta.chat.completions.parse
 
@@ -30,6 +31,49 @@ _PROMPT_CACHE_ENABLED = str(os.environ.get("ENABLE_PROMPT_CACHE", "1")).strip().
 _PROMPT_CACHE_MAX_SIZE = max(int(os.environ.get("PROMPT_CACHE_MAX_SIZE", "512")), 1)
 _PROMPT_CACHE: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 _PROMPT_CACHE_LOCK = threading.Lock()
+
+
+def _collect_debug_log(
+    *,
+    sid: Optional[str],
+    eid: Optional[int],
+    stage: str,
+    message: str,
+    elapsed_s: Optional[float],
+    collector: List[Dict[str, Any]],
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    elapsed_ms = None
+    if elapsed_s is not None:
+        try:
+            elapsed_ms = int(round(elapsed_s * 1000))
+        except Exception:
+            elapsed_ms = None
+    collector.append(
+        {
+            "sid": sid,
+            "eid": eid,
+            "stage": stage,
+            "message": message,
+            "elapsed_ms": elapsed_ms,
+            "extra": extra,
+        }
+    )
+
+
+def _build_debug_summary(events: List[Dict[str, Any]]) -> str:
+    if not events:
+        return "No stage events recorded."
+    parts: List[str] = []
+    for event in events:
+        stage = event.get("stage") or "unknown"
+        elapsed_ms = event.get("elapsed_ms")
+        message = event.get("message") or ""
+        if elapsed_ms is None:
+            parts.append(f"{stage}={message}")
+        else:
+            parts.append(f"{stage}={message} ({elapsed_ms} ms)")
+    return " | ".join(parts)
 
 
 def _read_int_env(name: str, default: int, minimum: int = 1) -> int:
@@ -700,30 +744,29 @@ async def answer_from_current_batch(current_writing_content: str, queries: List[
     return output
 
 # Identify sentence patterns using current and historical essays
-def identify_sentence_pattern(current_writing_content, history_content, best_match_writing_purpose):
+def identify_sentence_pattern_and_style(current_writing_content, history_content, best_match_writing_purpose):
     current_text = str(current_writing_content or "").strip()
     history_text = str(history_content or "").strip()
     purpose_text = str(best_match_writing_purpose or "").strip()
 
     if not current_text and not history_text:
-        return (
+        default_pattern = (
             "Type: Deklaratif informatif\n"
             "Explanation: Kalimat langsung untuk menyampaikan informasi inti secara jelas.\n"
             "Example: Kalimat menyatakan poin utama tanpa struktur kompleks.\n"
             "Pattern: [Subjek] + [Predikat] + [Objek/Keterangan]\n"
             "Function: Menjaga kejelasan ide utama dan kesinambungan paragraf."
         )
+        return default_pattern, "", ""
 
-    user_prompt = f"""Anda adalah analis gaya kalimat bahasa Indonesia.
-Pilih SATU pola kalimat terbaik untuk kalimat prediksi berdasarkan 3 input:
-1) Isi esai saat ini
-2) Isi esai riwayat
-3) Tujuan penulisan kalimat prediksi
+    user_prompt = f"""# Instruksi:
+Anda adalah analis gaya penulisan bahasa Indonesia.
+Tugas Anda: (1) pilih SATU pola kalimat terbaik untuk kalimat prediksi, dan (2) analisis pola serta fitur gaya penulisan pengguna.
 
 Gunakan ringkasan gaya dari esai saat ini sebagai prioritas utama, lalu sesuaikan dengan riwayat jika relevan.
-Jangan membuat banyak opsi. Kembalikan satu jawaban final saja.
+Jangan membuat banyak opsi. Kembalikan satu jawaban final saja untuk pola kalimat.
 
-Input:
+# Input:
 [CURRENT ESSAY]
 {current_text}
 
@@ -732,30 +775,75 @@ Input:
 
 [PREDICTION PURPOSE]
 {purpose_text}
-
-Output HARUS tepat 5 baris berikut:
-Type: ...
-Explanation: ...
-Example: ...
-Pattern: ...
-Function: ...
 """
 
-    try:
-        response = client.chat.completions.create(
-           model="gpt-5-nano",
-            reasoning_effort="minimal",
-            messages=[
-                {"role": "system", "content": "Kamu menjawab ringkas, konsisten, dan mengikuti format output."},
-                {"role": "user", "content": user_prompt},
-            ],
+    class WritingPattern(BaseModel):
+        writing_pattern_type: str
+        explanation: str
+        pattern: str
+        example: str
+
+    class WritingFeature(BaseModel):
+        writing_feature_type: str
+        explanation: str
+        example: str
+        preferred_words: str
+        preferred_syntax: str
+
+    class PatternAndStyle(BaseModel):
+        sentence_pattern: str
+        writing_patterns: list[WritingPattern]
+        writing_features: list[WritingFeature]
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Kamu menjawab ringkas, konsisten, dan mengikuti format output. "
+                "Field sentence_pattern HARUS tepat 5 baris berikut:\n"
+                "Type: ...\n"
+                "Explanation: ...\n"
+                "Example: ...\n"
+                "Pattern: ...\n"
+                "Function: ..."
+            ),
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+
+    response = _cached_chat_parse(
+        model="gpt-4o-mini",
+        reasoning_effort="minimal",
+        messages=messages,
+        response_format=PatternAndStyle,
+        use_cache=True,
+    )
+    parsed = response.choices[0].message.parsed
+
+    writing_patterns_formatted = []
+    for idx, pattern in enumerate(parsed.writing_patterns, start=1):
+        writing_patterns_formatted.append(
+            f"Pattern {idx}:\n"
+            f"Type: {pattern.writing_pattern_type}\n"
+            f"Explanation: {pattern.explanation}\n"
+            f"Pattern: {pattern.pattern}\n"
+            f"Example: {pattern.example}\n"
         )
-        content = (response.choices[0].message.content or "").strip()
-        if not content:
-            raise ValueError("Empty response from model.")
-        return content
-    except Exception as exc:
-        raise RuntimeError(f"Sentence pattern generation failed: {str(exc)}")
+    writing_patterns_formatted_output = "\n".join(writing_patterns_formatted)
+
+    writing_features_formatted = []
+    for idx, feature in enumerate(parsed.writing_features, start=1):
+        writing_features_formatted.append(
+            f"Feature {idx}:\n"
+            f"Type: {feature.writing_feature_type}\n"
+            f"Explanation: {feature.explanation}\n"
+            f"Example: {feature.example}\n"
+            f"Preferred Words: {feature.preferred_words}\n"
+            f"Preferred Syntax: {feature.preferred_syntax}\n"
+        )
+    writing_features_formatted_output = "\n".join(writing_features_formatted)
+
+    return parsed.sentence_pattern, writing_patterns_formatted_output, writing_features_formatted_output
 
 def _split_history_content_batches(history_content: str, max_chars: int) -> List[str]:
     text = str(history_content or "").strip()
@@ -1017,19 +1105,18 @@ Sederhanakan kalimat PASTIKAN kalimatnya ringkas dan tidak terlalu panjang.
 
 
 # prediction check
-def get_or_create_sentence_pattern(sid, eid, current_content, history_content, purpose):
+def get_or_create_sentence_pattern_and_style(sid, eid, current_content, history_content, purpose):
     # Keep sid/eid in signature for compatibility with existing callers.
     _ = (sid, eid)
-    raw_result = identify_sentence_pattern(
+    pattern, writing_patterns, writing_features = identify_sentence_pattern_and_style(
         current_content,
         history_content,
-        purpose
+        purpose,
     )
-    return normalize_pattern_string(raw_result)
+    return normalize_pattern_string(pattern), writing_patterns, writing_features
 
 
-
-def normalize_pattern_string(value: str) -> str: # normalize "type:" from llm
+def normalize_pattern_string(value: str) -> str:  # normalize "type:" from llm
     """
     Membersihkan pola keluaran LLM seperti:
     '3. Type: Cultural ...'
@@ -1039,11 +1126,12 @@ def normalize_pattern_string(value: str) -> str: # normalize "type:" from llm
     menjadi format standar:
     'Type: <pattern description>'
     """
-
     if not isinstance(value, str):
         return value
 
     v = value.strip()
+    if not v:
+        return v
 
     # 1. Hilangkan angka prefix misalnya "3." atau "4. "
     if v[0].isdigit() and "." in v:
@@ -1055,7 +1143,7 @@ def normalize_pattern_string(value: str) -> str: # normalize "type:" from llm
 
     # 3. Hilangkan prefix "Pattern:" jika muncul
     if v.lower().startswith("pattern:"):
-        v = v[len("pattern:"):].strip()
+        v = v[len("pattern:") :].strip()
 
     # 4. Pastikan final string diawali dengan "Type:"
     if not v.lower().startswith("type:"):
@@ -1063,7 +1151,8 @@ def normalize_pattern_string(value: str) -> str: # normalize "type:" from llm
 
     return v
 
-            
+
+
 # Execute prediction
 async def _run_blocking(func, /, *args, **kwargs):
     """Run blocking code in a worker thread to keep FastAPI event loop responsive."""
@@ -1079,6 +1168,7 @@ async def get_predict_sentence(
     title: str,
 ) -> tuple[str, str, Dict[str, Any]]:
     start_time = time.time()  # Start time
+    debug_events: List[Dict[str, Any]] = []
     try:
         timeout = 100  # seconds
 
@@ -1095,21 +1185,45 @@ async def get_predict_sentence(
             writing_purposes_list = identify_writing_purpose(current_essay_content)
             if not writing_purposes_list:
                 raise ValueError("Failed to identify a writing purpose for the current essay.")
-            print(f"[DEBUG] Writing-purpose identification took {time.time() - purpose_start:.2f} s")
+            purpose_elapsed = time.time() - purpose_start
+            _collect_debug_log(
+                sid=sid,
+                eid=eid,
+                stage="writing_purpose_identification",
+                message=f"Writing-purpose identification took {purpose_elapsed:.2f} s",
+                elapsed_s=purpose_elapsed,
+                collector=debug_events,
+            )
 
             # 2. Vote for the best writing purpose
             vote_start = time.time()
             best_match_writing_purpose, error_msg = vote_writing_purpose(current_essay_content, writing_purposes_list)
             if error_msg:
                 raise ValueError(f"Voting error while selecting writing purpose: {error_msg}")
-            print(f"[DEBUG] Writing-purpose voting took {time.time() - vote_start:.2f} s")
+            vote_elapsed = time.time() - vote_start
+            _collect_debug_log(
+                sid=sid,
+                eid=eid,
+                stage="writing_purpose_voting",
+                message=f"Writing-purpose voting took {vote_elapsed:.2f} s",
+                elapsed_s=vote_elapsed,
+                collector=debug_events,
+            )
 
             # 3. Generate guiding questions
             query_start = time.time()
             query_list = generate_question(current_essay_content, best_match_writing_purpose)
             if not query_list:
                 raise ValueError("Failed to generate guiding questions for retrieval.")
-            print(f"[DEBUG] Question generation took {time.time() - query_start:.2f} s")
+            query_elapsed = time.time() - query_start
+            _collect_debug_log(
+                sid=sid,
+                eid=eid,
+                stage="question_generation",
+                message=f"Question generation took {query_elapsed:.2f} s",
+                elapsed_s=query_elapsed,
+                collector=debug_events,
+            )
 
             # 4 & 5. Retrieve history/current answers concurrently (batch)
             batch_start = time.time()
@@ -1133,32 +1247,46 @@ async def get_predict_sentence(
                     answer_from_current_list += f"Question: {query}\nAnswer: {query_answer_from_current}\n\n"
 
             elapsed = time.time() - batch_start
-            print(f"[DEBUG] Batch retrieval (history + current) took {elapsed:.2f} s")
+            _collect_debug_log(
+                sid=sid,
+                eid=eid,
+                stage="batch_retrieval",
+                message=f"Batch retrieval (history + current) took {elapsed:.2f} s",
+                elapsed_s=elapsed,
+                collector=debug_events,
+            )
 
-            # 6 & 7. Sentence pattern lookup + writing-style analysis concurrently
+            # 6 & 7. Sentence pattern lookup + writing-style analysis (single call)
             pattern_style_start = time.time()
-            sentence_pattern_task = asyncio.to_thread(
-                get_or_create_sentence_pattern,
+            pattern_style_task = asyncio.to_thread(
+                get_or_create_sentence_pattern_and_style,
                 sid,
                 eid,
                 current_essay_content,
                 history_essay_content,
                 best_match_writing_purpose,
             )
-            writing_style_task = asyncio.create_task(identify_writing_pattern(history_essay_content))
-
-            best_match_sentence_pattern, (
+            (
+                best_match_sentence_pattern,
                 writing_patterns_formatted_output,
                 writing_features_formatted_output,
-            ) = await asyncio.gather(sentence_pattern_task, writing_style_task)
+            ) = await pattern_style_task
 
             if not best_match_sentence_pattern:
                 raise ValueError("Unable to obtain a sentence pattern for the prediction step.")
             if not writing_patterns_formatted_output or not writing_features_formatted_output:
                 raise ValueError("Failed to identify writing patterns or features.")
-            print(
-                f"[DEBUG] Sentence-pattern lookup + writing-style analysis took "
-                f"{time.time() - pattern_style_start:.2f} s"
+            pattern_style_elapsed = time.time() - pattern_style_start
+            _collect_debug_log(
+                sid=sid,
+                eid=eid,
+                stage="sentence_pattern_and_style",
+                message=(
+                    "Sentence-pattern lookup + writing-style analysis took "
+                    f"{pattern_style_elapsed:.2f} s"
+                ),
+                elapsed_s=pattern_style_elapsed,
+                collector=debug_events,
             )
 
             # 8ï¸ NEW: Vocabulary Extraction (for lexical insight)
@@ -1183,7 +1311,15 @@ async def get_predict_sentence(
             )
             if not final_predict_sentence:
                 raise ValueError("Model did not return a predicted sentence.")
-            print(f"[DEBUG] Sentence prediction took {time.time() - predict_start:.2f} s")
+            predict_elapsed = time.time() - predict_start
+            _collect_debug_log(
+                sid=sid,
+                eid=eid,
+                stage="sentence_prediction",
+                message=f"Sentence prediction took {predict_elapsed:.2f} s",
+                elapsed_s=predict_elapsed,
+                collector=debug_events,
+            )
 
             context_summary = {
                 "title": title,
@@ -1205,10 +1341,17 @@ async def get_predict_sentence(
             final_predict_sentence = self_improve_result["best_predicted_sentence"]
             user_prompt = self_improve_result["best_prompt_snapshot"]
 
-            print(
-                "[DEBUG] Prompt self-improve selected prediction "
-                f"with weighted_total={self_improve_result['best_score_summary']['weighted_total']:.4f} "
-                f"verdict={self_improve_result['best_score_summary']['verdict']}"
+            _collect_debug_log(
+                sid=sid,
+                eid=eid,
+                stage="prompt_self_improve",
+                message=(
+                    "Prompt self-improve selected prediction "
+                    f"with weighted_total={self_improve_result['best_score_summary']['weighted_total']:.4f} "
+                    f"verdict={self_improve_result['best_score_summary']['verdict']}"
+                ),
+                elapsed_s=None,
+                collector=debug_events,
             )
             _append_feedback_log(
                 {
@@ -1226,22 +1369,88 @@ async def get_predict_sentence(
                 self_improve_result=self_improve_result,
             )
 
+            log_prompt_snapshot(
+                sid=str(sid),
+                eid=int(eid),
+                prompt_snapshot=user_prompt,
+                predicted_sentence=final_predict_sentence,
+                model="gpt-5",
+                self_improve_result=self_improve_result,
+            )
+
             return final_predict_sentence, user_prompt, self_improve_result
 
         # Run all steps with timeout protection
         final_predict_sentence, user_prompt, self_improve_result = await asyncio.wait_for(
             predict_with_timeout(), timeout=timeout
         )
-        print(f"[DEBUG] Total prediction time: {time.time() - start_time:.2f} s")
+        total_elapsed = time.time() - start_time
+        _collect_debug_log(
+            sid=sid,
+            eid=eid,
+            stage="total_prediction",
+            message=f"Total prediction time: {total_elapsed:.2f} s",
+            elapsed_s=total_elapsed,
+            collector=debug_events,
+        )
+
+        try:
+            log_debug_event(
+                sid=str(sid),
+                eid=int(eid),
+                stage="prediction_run",
+                message=_build_debug_summary(debug_events),
+                elapsed_ms=int(round(total_elapsed * 1000)),
+                extra={"events": debug_events},
+            )
+        except Exception as exc:
+            print(f"[WARNING] Debug log insert failed: {exc}")
 
         return final_predict_sentence, user_prompt, self_improve_result
 
     except asyncio.TimeoutError:
-        print(f"[WARNING] Prediction timed out after {time.time() - start_time:.2f} s")
+        timeout_elapsed = time.time() - start_time
+        _collect_debug_log(
+            sid=sid,
+            eid=eid,
+            stage="prediction_timeout",
+            message=f"Prediction timed out after {timeout_elapsed:.2f} s",
+            elapsed_s=timeout_elapsed,
+            collector=debug_events,
+        )
+        try:
+            log_debug_event(
+                sid=str(sid),
+                eid=int(eid),
+                stage="prediction_timeout",
+                message=_build_debug_summary(debug_events),
+                elapsed_ms=int(round(timeout_elapsed * 1000)),
+                extra={"events": debug_events},
+            )
+        except Exception as exc:
+            print(f"[WARNING] Debug log insert failed: {exc}")
         raise TimeoutError("Prediction workflow exceeded the allowed time.")
     except Exception as e:
-        print(f"[ERROR] Prediction failed after {time.time() - start_time:.2f} s")
-        print(f"[ERROR] Reason: {str(e)}")
+        fail_elapsed = time.time() - start_time
+        _collect_debug_log(
+            sid=sid,
+            eid=eid,
+            stage="prediction_error",
+            message=f"Prediction failed after {fail_elapsed:.2f} s: {str(e)}",
+            elapsed_s=fail_elapsed,
+            collector=debug_events,
+        )
+        try:
+            log_debug_event(
+                sid=str(sid),
+                eid=int(eid),
+                stage="prediction_error",
+                message=_build_debug_summary(debug_events),
+                elapsed_ms=int(round(fail_elapsed * 1000)),
+                extra={"events": debug_events},
+            )
+        except Exception as exc:
+            print(f"[WARNING] Debug log insert failed: {exc}")
         raise e
 
 
@@ -1348,7 +1557,7 @@ def _call_structured_with_retry(
     system_prompt: str,
     user_prompt: str,
     response_model: Any,
-    model: str = "gpt-5-nano-2025-08-07",
+    model: str = "gpt-5-nano",
 ):
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1717,7 +1926,7 @@ Aturan:
         for attempt in range(2):
             try:
                 response = self._client.chat.completions.create(
-                    model="gpt-5-nano-2025-08-07",
+                    model="gpt-5-nano",
                     messages=messages,
                     temperature=0,
                     response_format={"type": "json_object"},
@@ -1759,7 +1968,7 @@ def _predict_from_pcp_prompt(pcp_prompt: str) -> str:
         predict_sentence: str
 
     response = _cached_chat_parse(
-        model="gpt-5-nano-2025-08-07",
+        model="gpt-5-nano",
         reasoning_effort="low",
         messages=[{"role": "user", "content": pcp_prompt}],
         response_format=PredictSentence,

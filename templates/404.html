@@ -16,7 +16,11 @@
       src="https://use.fontawesome.com/releases/v6.3.0/js/all.js"
       crossorigin="anonymous"
     ></script>
-  </head>
+      <script>
+      window.API_BASE_URL = "{{ api_base_url }}";
+    </script>
+    <script src="/static/js/api_client.js"></script>
+    </head>
   <body>
     <!-- 內容將由 JavaScript 動態生成 -->
     <script
@@ -26,3 +30,6 @@
     <script src="/static/js/404.js"></script>
   </body>
 </html>
+
+
+

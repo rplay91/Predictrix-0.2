@@ -4,6 +4,9 @@ Chart.defaults.global.defaultFontColor = '#292b2c';
 
 // Bar Chart Example
 var ctx = document.getElementById("myBarChart");
+if (!ctx || !window.Chart) {
+  // Skip chart init when canvas is absent on the page.
+} else {
 var myLineChart = new Chart(ctx, {
   type: 'bar',
   data: {
@@ -44,3 +47,4 @@ var myLineChart = new Chart(ctx, {
     }
   }
 });
+}

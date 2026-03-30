@@ -23,6 +23,10 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css"
     />
+      <script>
+      window.API_BASE_URL = "{{ api_base_url }}";
+    </script>
+    <script src="/static/js/api_client.js"></script>
   </head>
   <body class="sb-nav-fixed">
     <!-- Memuat skrip berurutan -->
@@ -30,7 +34,15 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="/static/js/editor_helper.js"></script>
     <script src="/static/js/scripts.js?v=20260322"></script>
-    <script src="/static/js/hw1_writing.js?v=20260323-1"></script>
+    <script src="/static/js/hw1_writing.js?v=20260330-1"></script>
+    <script>
+      window.__TASK_TYPE__ = "hw1";
+    </script>
+    <script src="/static/js/task_duration.js?v=20260325"></script>
   </body>
 </html>
+
+
+
+
 

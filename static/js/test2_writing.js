@@ -1,4 +1,4 @@
-﻿const beforeUnloadHandler = (e) => {
+const beforeUnloadHandler = (e) => {
   e.preventDefault();
   e.returnValue =
     "Meninggalkan halaman ini akan membuat progres Anda hilang!";
@@ -189,6 +189,7 @@ function initializePage() {
   };
 
   createInterface();
+  initializeSidebar();
 
   document.getElementById("articleTitle").textContent = demoData.title;
 
@@ -199,6 +200,9 @@ function initializePage() {
   if (window.initRichTextEditor) {
     window.initRichTextEditor();
   }
+
+  setupWordCounter();
+  setupEditorFontSlider();
 
   window.addEventListener("beforeunload", beforeUnloadHandler);
 }
@@ -244,14 +248,28 @@ function createInterface() {
               </div>
             </div>
 
-            <div class="area-title"> Area Menulis </div>
+            <div class="area-title-row" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <div class="area-title"> Area Menulis </div>
+              <div id="wordCounter" class="word-counter"></div>
+            </div>
             <div class="editor-container">
               <div id="editor" class="editor" contenteditable="true"></div>
             </div>
+          </div>
 
-            <div class="area-title"> Informasi Konteks </div>
-            <div class="context-container">
-              <div class="resources-container">
+          <div class="sidebar">
+            <div class="sidebar-tabs">
+              <button class="tab-btn active" data-tab="context">
+                <i class="fas fa-images"></i> <br />Konteks Gambar
+              </button>
+            </div>
+
+            <div class="sidebar-content">
+              <div class="tab-panel active" id="contextPanel">
+                <div class="area-title"> Informasi Konteks </div>
+                <div class="context-container">
+                  <div class="resources-container"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -264,9 +282,7 @@ function createInterface() {
 }
 
 function initializeResources(images) {
-  const container = document.querySelector(
-    ".editor-section .resources-container"
-  );
+  const container = document.querySelector(".context-container .resources-container");
 
   if (!container) {
     return;
@@ -369,6 +385,155 @@ function updateTimeDisplay(timeLeft) {
   document.title = `Tes Menulis (${formatTime(timeLeft)})`;
 }
 
+function setupWordCounter() {
+  const editor = document.getElementById("editor");
+  if (!editor) {
+    return;
+  }
+
+  let counter = document.getElementById("wordCounter");
+  if (!counter) {
+    counter = document.createElement("div");
+    counter.id = "wordCounter";
+    counter.style.cssText =
+      "display:flex; align-items:center; gap:8px; font-size:14px; color:#334155;";
+    const row = document.querySelector(".area-title-row");
+    if (row) {
+      row.appendChild(counter);
+    } else {
+      return;
+    }
+  }
+  if (!counter.innerHTML) {
+    counter.innerHTML = `
+      <span id="wordCounterEmoji" style="font-size:18px;">??</span>\n      <span id="wordCounterText">0 kata</span>
+    `;
+  }
+
+  const emojiEl = document.getElementById("wordCounterEmoji");
+  const textEl = document.getElementById("wordCounterText");
+
+  const getWordCount = (text) => {
+    const cleaned = String(text || "").trim().replace(/\s+/g, " ");
+    if (!cleaned) return 0;
+    return cleaned.split(" ").length;
+  };
+
+  const getState = (count) => {
+    if (count < 200) {
+      return { emoji: "??" };
+    }
+    if (count < 300) {
+      return { emoji: "??" };
+    }
+    if (count < 500) {
+      return { emoji: "??" };
+    }
+    return { emoji: "??" };
+  };
+
+  const updateCounter = () => {
+    const count = getWordCount(editor.textContent);
+    const state = getState(count);
+    if (emojiEl) emojiEl.textContent = state.emoji;
+    if (textEl) textEl.textContent = `${count} kata`;
+  };
+
+  editor.addEventListener("input", updateCounter);
+  editor.addEventListener("keyup", updateCounter);
+  updateCounter();
+}
+
+function setupEditorFontSlider() {
+  const editor = document.getElementById("editor");
+  if (!editor) {
+    return;
+  }
+
+  const container = editor.closest(".editor-container") || editor.parentElement;
+  if (!container) {
+    return;
+  }
+
+  let control = container.querySelector(".editor-font-control");
+  if (!control) {
+    control = document.createElement("div");
+    control.className = "editor-font-control";
+    control.innerHTML = `
+      <span style="font-weight:600;">A</span>
+      <input id="editorFontSlider" type="range" min="12" max="24" step="1" />
+      <span id="editorFontValue">16px</span>
+    `;
+    const toolbar = container.querySelector(".editor-toolbar");
+    if (toolbar) {
+      toolbar.appendChild(control);
+    } else {
+      container.appendChild(control);
+    }
+  }
+
+  const slider = control.querySelector("#editorFontSlider");
+  const valueLabel = control.querySelector("#editorFontValue");
+  if (!slider || !valueLabel) {
+    return;
+  }
+
+  const currentSize = parseInt(
+    window.getComputedStyle(editor).fontSize || "16",
+    10
+  );
+  slider.value = String(currentSize);
+  valueLabel.textContent = `${currentSize}px`;
+
+  const updateFontSize = (value) => {
+    document.documentElement.style.setProperty(
+      "--editor-font-size",
+      `${value}px`
+    );
+    valueLabel.textContent = `${value}px`;
+  };
+
+  slider.addEventListener("input", (e) => {
+    updateFontSize(e.target.value);
+  });
+}
+
+function initializeSidebar() {
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const panels = document.querySelectorAll(".tab-panel");
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      panels.forEach((p) => p.classList.remove("active"));
+
+      btn.classList.add("active");
+      const targetPanel = document.getElementById(`${btn.dataset.tab}Panel`);
+      if (targetPanel) {
+        targetPanel.classList.add("active");
+      }
+    });
+  });
+
+  const sidebar = document.querySelector(".sidebar");
+  if (!sidebar) {
+    return;
+  }
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.className = "sidebar-toggle";
+  toggleBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+
+  sidebar.appendChild(toggleBtn);
+
+  toggleBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("collapsed");
+    document
+      .querySelector(".main-content")
+      .classList.toggle("sidebar-collapsed");
+  });
+}
+
 async function timeUp() {
   const updateSuccess = await updateEssayContent();
 
@@ -458,12 +623,12 @@ const markedText = document.getElementById("markedText");
 
 function normalizeText(text) {
   return text
-    .replace(/ï¼ˆ/g, "(")
-    .replace(/ï¼‰/g, ")")
-    .replace(/ï¼Œ/g, ",")
-    .replace(/ã€‚/g, ".")
-    .replace(/ï¼/g, "!")
-    .replace(/ï¼Ÿ/g, "?")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/，/g, ",")
+    .replace(/。/g, ".")
+    .replace(/！/g, "!")
+    .replace(/？/g, "?")
     .trim();
 }
 
@@ -520,6 +685,8 @@ function updatePrediction() {
     markedTextElement.textContent = markContent;
   }
 }
+
+
 
 
 

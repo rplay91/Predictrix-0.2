@@ -19,6 +19,7 @@
   --text-base: 16px;
   --text-lg: 20px;
   --text-xl: 48px;
+  --editor-font-size: clamp(14px, 1.1vw + 10px, 18px);
 }
 
 body {
@@ -115,6 +116,10 @@ body {
   letter-spacing: 0.25px;
 }
 
+.word-counter {
+  margin-right: 20px;
+}
+
 /* ????? */
 .editor-section {
   flex: 0 1 800px;
@@ -130,14 +135,18 @@ body {
   flex: 1.5;
   margin: 20px;
   padding: 0;
-  border-radius: 0;
-  background-color: transparent;
+  border-radius: 8px;
+  background-color: #ffffff;
   box-shadow: none;
+  border: 1px solid #e0e0e0;
   transition: all 0.2s ease;
   margin-top: 0; /* ?????? */
   min-width: 0;
-  height: 300px; /* ?????? */
-  overflow-y: auto; /* ?????? */
+  height: clamp(360px, 60vh, 720px);
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .editor-container:hover {
@@ -146,28 +155,34 @@ body {
 
 .editor {
   width: 100%;
-  height: 100%;
-  font-size: var(--text-base);
+  flex: 1;
+  height: auto;
+  font-size: var(--editor-font-size);
   line-height: 1.7;
   color: var(--text-color);
   outline: none;
+  padding: 16px;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
 }
 
 .editor-container .ql-toolbar.ql-snow {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px 8px 0 0;
+  border: none;
+  border-bottom: 1px solid #e0e0e0;
+  border-radius: 0;
   background: #fff;
 }
 
 .editor-container .ql-container.ql-snow {
-  border: 1px solid #e0e0e0;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
+  border: none;
+  border-radius: 0;
   height: calc(100% - 42px);
 }
 
 .editor-container .ql-editor {
-  font-size: 16px;
+  font-size: var(--editor-font-size);
   line-height: 1.7;
   min-height: 200px;
 }
@@ -200,21 +215,35 @@ body {
   margin: 0 0 12px;
 }
 
+.editor-font-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  margin-left: auto;
+}
+
+.editor-font-control input[type="range"] {
+  width: 90px;
+}
+
 .context-container {
   position: relative;
   flex: 1.5;
-  margin: 0 20px 20px;
-  padding: 20px;
-  border-radius: 8px;
-  background-color: white;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05),
-    0 4px 8px rgba(0, 0, 0, 0.05);
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
   transition: all 0.2s ease;
-  overflow-x: auto;
-  overflow-y: visible; /* ?? visible ???????? */
+  overflow: visible;
   min-width: 0;
-  display: flex;
-  align-items: flex-start; /* ?????? */
+  display: block;
 }
 
 /* ?????? */
@@ -270,26 +299,30 @@ body {
   display: block;
 }
 
+#contextPanel {
+  padding: 16px 18px 24px;
+}
+
 /* ?????? */
 .resources-container {
   display: flex;
-  gap: 20px;
-  padding: 20px;
-  min-width: min-content;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 6px;
   width: 100%;
-  flex-wrap: nowrap;
-  align-items: stretch; /* ????????? */
+  align-items: stretch;
 }
 
 .resource-item {
-  flex: 0 0 300px;
-  width: 300px;
-  margin: 10px 0;
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0;
+  max-width: 440px;
+  align-self: center;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
   background-color: white;
-  flex-shrink: 0;
   transition: all 0.3s ease; /* ?????? */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* ???? */
 }
@@ -735,20 +768,20 @@ body {
 
   /* context-container ?????? */
   .context-container {
-    margin: 10px;
-    padding: 15px;
-    max-height: none; /* ???????? */
+    margin: 0;
+    padding: 0;
+    max-height: none;
   }
 
   .resources-container {
-    padding: 15px;
-    gap: 15px;
+    padding: 0 4px;
+    gap: 12px;
   }
 
   .resource-item {
-    flex: 0 0 280px;
-    width: 280px;
-    margin: 0; /* ???? */
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0;
   }
 
   .resource-item:hover {
@@ -795,14 +828,14 @@ body {
   }
 
   .resources-container {
-    padding: 10px;
-    justify-content: center;
+    padding: 0 4px;
+    justify-content: flex-start;
   }
 
   .resource-item {
-    flex: 0 0 calc(100% - 20px); /* ???? margin */
+    flex: 0 0 auto;
     max-width: 100%;
-    margin: 10px;
+    margin: 0;
   }
 
   .prediction-content {
@@ -844,18 +877,18 @@ body {
 
 @media screen and (max-width: 480px) {
   .context-container {
-    margin: 5px;
-    padding: 10px;
+    margin: 0;
+    padding: 0;
   }
 
   .resources-container {
-    padding: 10px;
+    padding: 0;
     gap: 10px;
   }
 
   .resource-item {
-    flex: 0 0 260px;
-    width: 260px;
+    flex: 0 0 auto;
+    width: 100%;
   }
 
   .countdown {
@@ -1100,11 +1133,14 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px 8px 0 0;
+  border: none;
+  border-bottom: 1px solid #e0e0e0;
+  border-radius: 0;
   background: #ffffff;
-  position: sticky;
-  top: 0;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  flex: 0 0 auto;
   z-index: 2;
 }
 
@@ -1159,9 +1195,7 @@ body {
 }
 
 .editor-container .editor {
-  border: 1px solid #e0e0e0;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  padding: 16px;
-  background: #ffffff;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }

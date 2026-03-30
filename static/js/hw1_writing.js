@@ -172,6 +172,9 @@ function initializePage() {
       window.setEditorHtml(normalized);
     }
 
+    setupWordCounter();
+    setupEditorFontSlider();
+
     initializeSidebar();
     if (Array.isArray(essayData.images)) {
       initializeResources(essayData.images);
@@ -316,7 +319,10 @@ function createInterface() {
               </div>
             </div>
             
-            <div class="area-title"> Area Menulis </div>
+            <div class="area-title-row" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <div class="area-title"> Area Menulis </div>
+              <div id="wordCounter" class="word-counter"></div>
+            </div>
             <div class="editor-container">
               <div id="editor" class="editor" contenteditable="true"></div>
             </div>
@@ -361,6 +367,119 @@ function createInterface() {
     mainContent.innerHTML = mainStructure;
   } else {
   }
+}
+
+function setupWordCounter() {
+  const editor = document.getElementById("editor");
+  if (!editor) {
+    return;
+  }
+
+  let counter = document.getElementById("wordCounter");
+  if (!counter) {
+    counter = document.createElement("div");
+    counter.id = "wordCounter";
+    counter.style.cssText =
+      "display:flex; align-items:center; gap:8px; font-size:14px; color:#334155;";
+    const row = document.querySelector(".area-title-row");
+    if (row) {
+      row.appendChild(counter);
+    } else {
+      return;
+    }
+  }
+  if (!counter.innerHTML) {
+    counter.innerHTML = `
+      <span id="wordCounterEmoji" style="font-size:18px;">😢</span>\n      <span id="wordCounterText">0 kata</span>
+    `;
+  }
+
+  const emojiEl = document.getElementById("wordCounterEmoji");
+  const textEl = document.getElementById("wordCounterText");
+
+  const getWordCount = (text) => {
+    const cleaned = String(text || "").trim().replace(/\s+/g, " ");
+    if (!cleaned) return 0;
+    return cleaned.split(" ").length;
+  };
+
+  const getState = (count) => {
+    if (count < 200) {
+      return { emoji: "😢" };
+    }
+    if (count < 300) {
+      return { emoji: "😢" };
+    }
+    if (count < 500) {
+      return { emoji: "😐" };
+    }
+    return { emoji: "😊" };
+  };
+
+  const updateCounter = () => {
+    const count = getWordCount(editor.textContent);
+    const state = getState(count);
+    if (emojiEl) emojiEl.textContent = state.emoji;
+    if (textEl) textEl.textContent = `${count} kata`;
+  };
+
+  editor.addEventListener("input", updateCounter);
+  editor.addEventListener("keyup", updateCounter);
+  updateCounter();
+}
+
+function setupEditorFontSlider() {
+  const editor = document.getElementById("editor");
+  if (!editor) {
+    return;
+  }
+
+  const container = editor.closest(".editor-container") || editor.parentElement;
+  if (!container) {
+    return;
+  }
+
+  let control = container.querySelector(".editor-font-control");
+  if (!control) {
+    control = document.createElement("div");
+    control.className = "editor-font-control";
+    control.innerHTML = `
+      <span style="font-weight:600;">A</span>
+      <input id="editorFontSlider" type="range" min="12" max="24" step="1" />
+      <span id="editorFontValue">16px</span>
+    `;
+    const toolbar = container.querySelector(".editor-toolbar");
+    if (toolbar) {
+      toolbar.appendChild(control);
+    } else {
+      container.appendChild(control);
+    }
+  }
+
+  const slider = control.querySelector("#editorFontSlider");
+  const valueLabel = control.querySelector("#editorFontValue");
+  if (!slider || !valueLabel) {
+    return;
+  }
+
+  const currentSize = parseInt(
+    window.getComputedStyle(editor).fontSize || "16",
+    10
+  );
+  slider.value = String(currentSize);
+  valueLabel.textContent = `${currentSize}px`;
+
+  const updateFontSize = (value) => {
+    document.documentElement.style.setProperty(
+      "--editor-font-size",
+      `${value}px`
+    );
+    valueLabel.textContent = `${value}px`;
+  };
+
+  slider.addEventListener("input", (e) => {
+    updateFontSize(e.target.value);
+  });
 }
 
 function handleReset() {
@@ -440,7 +559,7 @@ async function handleSave() {
     if (!editor) {
       throw new Error("Elemen editor tidak ditemukan");
     }
-    const content = editor.innerHTML;
+    const content = (window.getEditorContentForSave ? window.getEditorContentForSave() : editor.innerHTML);
 
     // 5. Send nave requent
     const response = await fetch(`/save_hw_content/${eid}`, {
@@ -958,7 +1077,7 @@ async function handleSubmit() {
     if (!editor) {
       throw new Error("Elemen editor tidak ditemukan");
     }
-    const content = editor.innerHTML;
+    const content = (window.getEditorContentForSave ? window.getEditorContentForSave() : editor.innerHTML);
 
     // 4. Show confirmation dialog
     const result = await Swal.fire({
@@ -1679,6 +1798,9 @@ async function updatePredictionCount(pid) {
   } catch (error) {
   }
 }
+
+
+
 
 
 

@@ -7068,6 +7068,18 @@ fieldset:disabled .btn {
     mask-position: -200% 0%;
   }
 }
+
+.editor.is-empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  white-space: pre-line;
+  pointer-events: none;
+  display: block;
+}
+
+.editor.is-empty:focus:before {
+  content: "";
+}
 .clearfix::after {
   display: block;
   clear: both;
