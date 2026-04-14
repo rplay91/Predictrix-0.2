@@ -26,13 +26,39 @@
       .replace(/'/g, "&#39;");
   }
 
+  function stripSectionMarkers(text = "") {
+    return String(text).replace(/={3,}/g, "").trim();
+  }
+
   function normalizeInitialContent(html, text) {
     return html;
   }
 
-  function getEditor() {
+  let activeEditor = null;
+
+  function getEditorRootEl() {
     return document.getElementById("editor");
   }
+
+  function getSectionEditors(root) {
+    const container = root || getEditorRootEl();
+    if (!container) return [];
+    const sections = container.querySelectorAll(".editor-section-field");
+    return sections.length ? Array.from(sections) : [container];
+  }
+
+  function getEditor() {
+    if (activeEditor) return activeEditor;
+    const root = getEditorRootEl();
+    if (!root) return null;
+    if (root.classList.contains("editor-section-field")) return root;
+    const first = root.querySelector(".editor-section-field");
+    return first || root;
+  }
+
+  window.getActiveEditorElement = function getActiveEditorElement() {
+    return getEditor();
+  };
 
   function updatePlaceholderState(editor) {
     editor.classList.remove("is-empty");
@@ -44,6 +70,18 @@
 
   function ensureDefaultContent(editor) {
     updatePlaceholderState(editor);
+  }
+
+  function flattenSectionHtml(html = "") {
+    const temp = document.createElement("div");
+    temp.innerHTML = html || "";
+    const sections = temp.querySelectorAll("[data-section]");
+    if (!sections.length) return html || "";
+    const combined = Array.from(sections)
+      .map((section) => section.innerHTML || "")
+      .filter((part) => part.trim())
+      .join("<div><br></div>");
+    return combined || temp.textContent || "";
   }
 
   function exec(command, value = null) {
@@ -64,8 +102,17 @@
   }
 
   function createToolbar(editor) {
-    const container = editor.parentElement;
-    if (!container || container.querySelector(".editor-toolbar")) return;
+    const container = editor.closest(".editor-container") || editor.parentElement;
+    if (!container) return;
+    const parent = container.parentElement;
+    if (!parent) return;
+    if (parent.querySelector(".editor-toolbar")) return;
+    let toolbarContainer = parent.querySelector(".editor-toolbar-container");
+    if (!toolbarContainer) {
+      toolbarContainer = document.createElement("div");
+      toolbarContainer.className = "editor-toolbar-container";
+      parent.insertBefore(toolbarContainer, container);
+    }
 
     const toolbar = document.createElement("div");
     toolbar.className = "editor-toolbar";
@@ -98,61 +145,54 @@
         <button type="button" class="tool-btn" data-cmd="justifyFull">Justify</button>
       </div>
       <div class="tool-group">
-        <button type="button" class="tool-btn" data-cmd="insertUnorderedList">Bullets</button>
-        <button type="button" class="tool-btn" data-cmd="insertOrderedList">Numbered</button>
-      </div>
-      <div class="tool-group">
-        <button type="button" class="tool-btn" data-link>Link</button>
         <label class="tool-color">
           Text
           <input type="color" class="tool-color-input" data-color="foreColor" value="#111827" />
         </label>
-        <label class="tool-color">
-          Highlight
-          <input type="color" class="tool-color-input" data-color="hiliteColor" value="#fff3bf" />
-        </label>
-      </div>
-      <div class="tool-group">
-        <button type="button" class="tool-btn" data-cmd="removeFormat">Clear</button>
       </div>
     `;
 
-    container.insertBefore(toolbar, editor);
+    toolbarContainer.appendChild(toolbar);
 
     toolbar.addEventListener("click", (event) => {
       const button = event.target.closest(".tool-btn");
       if (!button) return;
       const cmd = button.dataset.cmd;
       if (cmd) {
+        const targetEditor = getEditor();
+        if (targetEditor) targetEditor.focus();
         exec(cmd);
-        editor.focus();
       }
     });
 
     toolbar.querySelector(".tool-font").addEventListener("change", (event) => {
       const value = event.target.value;
+      const targetEditor = getEditor();
+      if (targetEditor) targetEditor.focus();
       exec("fontName", value);
-      editor.focus();
     });
 
     toolbar.querySelector(".tool-size").addEventListener("change", (event) => {
       const value = parseInt(event.target.value, 10);
+      const targetEditor = getEditor();
+      if (targetEditor) targetEditor.focus();
       applyFontSize(value);
-      editor.focus();
     });
 
     toolbar.querySelector(".tool-heading").addEventListener("change", (event) => {
       const tag = event.target.value;
+      const targetEditor = getEditor();
+      if (targetEditor) targetEditor.focus();
       exec("formatBlock", tag);
-      editor.focus();
     });
 
     toolbar.querySelectorAll(".tool-color-input").forEach((input) => {
       input.addEventListener("input", (event) => {
         const cmd = event.target.dataset.color;
         const color = event.target.value;
+        const targetEditor = getEditor();
+        if (targetEditor) targetEditor.focus();
         exec(cmd, color);
-        editor.focus();
       });
     });
 
@@ -161,7 +201,8 @@
       if (url) {
         exec("createLink", url);
       }
-      editor.focus();
+      const targetEditor = getEditor();
+      if (targetEditor) targetEditor.focus();
     });
   }
 
@@ -205,7 +246,7 @@
   }
 
   window.getEditorRoot = function getEditorRoot() {
-    return getEditor();
+    return getEditorRootEl();
   };
 
   window.getEditorHtml = function getEditorHtml() {
@@ -218,10 +259,21 @@
     return root ? root.textContent || "" : "";
   };
 
+  window.getCombinedEditorText = function getCombinedEditorText() {
+    const root = getEditorRootEl();
+    return root ? root.textContent || "" : "";
+  };
+
+  window.getCombinedEditorHtml = function getCombinedEditorHtml() {
+    const root = getEditorRootEl();
+    return root ? root.innerHTML || "" : "";
+  };
+
   window.setEditorHtml = function setEditorHtml(html) {
     const root = getEditor();
     if (root) {
-      root.innerHTML = html || "";
+      const normalized = flattenSectionHtml(html || "");
+      root.innerHTML = normalized || "";
       updatePlaceholderState(root);
     }
   };
@@ -234,8 +286,9 @@
   };
 
   window.setEditorEditable = function setEditorEditable(isEditable) {
-    const root = getEditor();
-    if (root) root.contentEditable = isEditable ? "true" : "false";
+    const root = getEditorRootEl();
+    if (!root) return;
+    root.contentEditable = isEditable ? "true" : "false";
   };
 
   window.normalizeEditorContent = function normalizeEditorContent(html) {
@@ -277,17 +330,38 @@
 
   window.initRichTextEditor = function initRichTextEditor() {
     try {
-      const editor = getEditor();
-      if (!editor || editor.dataset.manualEditorInitialized === "true") {
+      const root = getEditorRootEl();
+      if (!root || root.dataset.manualEditorInitialized === "true") {
         return;
       }
-      editor.setAttribute("contenteditable", "true");
-      createToolbar(editor);
-      ensureDefaultContent(editor);
-      editor.addEventListener("input", () => updatePlaceholderState(editor));
-      editor.addEventListener("focus", () => updatePlaceholderState(editor));
-      editor.addEventListener("blur", () => updatePlaceholderState(editor));
-      editor.dataset.manualEditorInitialized = "true";
+      const sections = getSectionEditors(root);
+      if (sections.length > 1) {
+        sections.forEach((section) => {
+          section.setAttribute("contenteditable", "true");
+          section.addEventListener("focus", () => {
+            activeEditor = section;
+            updatePlaceholderState(section);
+          });
+          section.addEventListener("click", () => {
+            activeEditor = section;
+          });
+          section.addEventListener("input", () => updatePlaceholderState(section));
+          section.addEventListener("blur", () => updatePlaceholderState(section));
+        });
+        activeEditor = sections[0];
+        createToolbar(root);
+        sections.forEach((section) => ensureDefaultContent(section));
+      } else {
+        const editor = getEditor();
+        if (!editor) return;
+        editor.setAttribute("contenteditable", "true");
+        createToolbar(editor);
+        ensureDefaultContent(editor);
+        editor.addEventListener("input", () => updatePlaceholderState(editor));
+        editor.addEventListener("focus", () => updatePlaceholderState(editor));
+        editor.addEventListener("blur", () => updatePlaceholderState(editor));
+      }
+      root.dataset.manualEditorInitialized = "true";
     } catch (error) {
       // console.error("Manual editor init failed:", error);
     }

@@ -32,6 +32,55 @@ const beforeUnloadHandler = (e) => {
   return e.returnValue;
 };
 
+const MIN_PREDICTION_ATTEMPTS = 3;
+
+function getPredictionAttemptKey() {
+  const essayData = JSON.parse(sessionStorage.getItem("essayData") || "{}");
+  const eid = essayData?.essay?.eid || sessionStorage.getItem("currentEid") || "unknown";
+  return `predictionAttempts:${eid}`;
+}
+
+function getPredictionAttemptCount() {
+  const key = getPredictionAttemptKey();
+  return Number.parseInt(sessionStorage.getItem(key) || "0", 10);
+}
+
+function incrementPredictionAttempt() {
+  const key = getPredictionAttemptKey();
+  const nextCount = getPredictionAttemptCount() + 1;
+  sessionStorage.setItem(key, String(nextCount));
+  return nextCount;
+}
+
+async function isPredictionRequirementMet() {
+  if (DEMO_MODE) return true;
+  const predictionBtn = document.getElementById("predictionBtn");
+  if (!predictionBtn) return true;
+  try {
+    const essayData = JSON.parse(sessionStorage.getItem("essayData") || "{}");
+    const eid = essayData?.essay?.eid;
+    if (!eid) return getPredictionAttemptCount() >= MIN_PREDICTION_ATTEMPTS;
+    const response = await fetch(`/load_hw_data/${eid}`);
+    if (!response.ok) return getPredictionAttemptCount() >= MIN_PREDICTION_ATTEMPTS;
+    const result = await response.json();
+    const count = Array.isArray(result?.data?.predictions)
+      ? result.data.predictions.length
+      : 0;
+    return count >= MIN_PREDICTION_ATTEMPTS;
+  } catch {
+    return getPredictionAttemptCount() >= MIN_PREDICTION_ATTEMPTS;
+  }
+}
+
+async function showPredictionRequirementReminder() {
+  return await Swal.fire({
+    title: "Gunakan Fitur Prediksi",
+    text: `Silakan coba fitur prediksi minimal ${MIN_PREDICTION_ATTEMPTS} kali sebelum mengumpulkan esai.`,
+    icon: "warning",
+    confirmButtonText: "OK",
+  });
+}
+
 async function checkHomeworkStatus(sid) {
   try {
     // console.log("Checking homework status for sid:", sid);
@@ -149,6 +198,8 @@ function initializePage() {
     }
 
     createInterface();
+    collapseEditorSections();
+    initializeTaskTimerUi();
 
     document.querySelectorAll(".instruction-box").forEach((box) => {
       box.addEventListener("click", function () {
@@ -330,8 +381,8 @@ function createInterface() {
               <div class="area-title"> Area Menulis </div>
               <div id="wordCounter" class="word-counter"></div>
             </div>
-            <div class="editor-container">
-              <div id="editor" class="editor" contenteditable="true"></div>
+          <div class="editor-container">
+              <div id="editor" class="editor"></div>
             </div>
           </div>
 
@@ -381,6 +432,38 @@ function createInterface() {
     }
     mainElement.innerHTML = mainStructure;
   }
+}
+
+function initializeTaskTimerUi() {
+  const headerRight = document.querySelector(".writing-header .header-right");
+  if (!headerRight) return;
+
+  let timerEl = document.querySelector(".task-timer");
+  if (!timerEl) {
+    timerEl = document.createElement("div");
+    timerEl.className = "task-timer";
+    headerRight.prepend(timerEl);
+  }
+
+  const formatTime = (totalSeconds) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(seconds).padStart(2, "0")}`;
+  };
+
+  const update = () => {
+    const elapsed = window.__TASK_TIMER__?.getElapsedSeconds
+      ? window.__TASK_TIMER__.getElapsedSeconds()
+      : 0;
+    timerEl.textContent = `Durasi: ${formatTime(elapsed)}`;
+  };
+
+  update();
+  setInterval(update, 1000);
 }
 
 function initializeDemoDriver() {
@@ -525,8 +608,8 @@ function initializeDemoDriver() {
 }
 
 function setupWordCounter() {
-  const editor = document.getElementById("editor");
-  if (!editor) {
+  const editorRoot = document.getElementById("editor");
+  if (!editorRoot) {
     return;
   }
 
@@ -572,14 +655,17 @@ function setupWordCounter() {
   };
 
   const updateCounter = () => {
-    const count = getWordCount(editor.textContent);
+    const combinedText = window.getCombinedEditorText
+      ? window.getCombinedEditorText()
+      : editorRoot.textContent;
+    const count = getWordCount(combinedText);
     const state = getState(count);
     if (emojiEl) emojiEl.textContent = state.emoji;
     if (textEl) textEl.textContent = `${count} kata`;
   };
 
-  editor.addEventListener("input", updateCounter);
-  editor.addEventListener("keyup", updateCounter);
+  editorRoot.addEventListener("input", updateCounter);
+  editorRoot.addEventListener("keyup", updateCounter);
   updateCounter();
 }
 
@@ -603,10 +689,17 @@ function setupEditorFontSlider() {
       <input id="editorFontSlider" type="range" min="12" max="24" step="1" />
       <span id="editorFontValue">16px</span>
     `;
-    const toolbar = container.querySelector(".editor-toolbar");
-    if (toolbar) {
-      toolbar.appendChild(control);
-    } else {
+  const toolbarContainer = container.previousElementSibling?.classList.contains(
+    "editor-toolbar-container"
+  )
+    ? container.previousElementSibling
+    : container.parentElement?.querySelector(".editor-toolbar-container");
+  const toolbar =
+    toolbarContainer?.querySelector(".editor-toolbar") ||
+    container.parentElement?.querySelector(".editor-toolbar");
+  if (toolbar) {
+    toolbar.appendChild(control);
+  } else {
       container.appendChild(control);
     }
   }
@@ -795,6 +888,44 @@ async function handleSave() {
     });
   }
 }
+
+async function saveDraftSilently() {
+  try {
+    const essayDataStr = sessionStorage.getItem("essayData");
+    if (!essayDataStr) return;
+    const essayData = JSON.parse(essayDataStr);
+    if (!essayData?.essay?.eid) return;
+    const eid = essayData.essay.eid;
+    const editor = document.getElementById("editor");
+    if (!editor) return;
+    const content = (window.getEditorContentForSave ? window.getEditorContentForSave() : editor.innerHTML);
+    const duration_sec = window.__TASK_TIMER__?.getElapsedSeconds
+      ? window.__TASK_TIMER__.getElapsedSeconds()
+      : 0;
+    const response = await fetch(`/save_hw_content/${eid}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content, duration_sec }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!result?.success) return;
+    essayData.essay.content = content;
+    sessionStorage.setItem("essayData", JSON.stringify(essayData));
+    localStorage.setItem(
+      "writingContent",
+      JSON.stringify({
+        title: document.getElementById("articleTitle").textContent,
+        content: content,
+      })
+    );
+  } catch {
+    // Silent fail.
+  }
+}
+
+window.__AUTO_SAVE__ = saveDraftSilently;
 
 function initializeResources(images) {
   const container = document.querySelector(
@@ -993,6 +1124,7 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
 
   async function handlePrediction() {
     try {
+    incrementPredictionAttempt();
     const editor = document.getElementById("editor");
     const predictionBtn = document.getElementById("predictionBtn");
     const markedText = document.getElementById("markedText");
@@ -1019,8 +1151,9 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
     }
 
     const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = editor.innerHTML;
-    const currentEnnayContent = tempDiv.innerText;
+    const currentEnnayContent = window.getCombinedEditorText
+      ? window.getCombinedEditorText()
+      : editor.textContent;
     const titleElement = document.getElementById("articleTitle");
     const title = titleElement ? titleElement.textContent : "";
     const essayData = JSON.parse(sessionStorage.getItem("essayData") || "{}");
@@ -1038,7 +1171,11 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       if (window.setEditorEditable) {
         window.setEditorEditable(false);
       } else {
-        editor.contentEditable = "false";
+        if (window.setEditorEditable) {
+          window.setEditorEditable(false);
+        } else {
+          editor.contentEditable = "false";
+        }
       }
       predictionBtn.disabled = true;
       if (overlay) overlay.classList.add("active");
@@ -1098,7 +1235,11 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
     if (window.setEditorEditable) {
       window.setEditorEditable(false);
     } else {
-      editor.contentEditable = "false";
+      if (window.setEditorEditable) {
+        window.setEditorEditable(false);
+      } else {
+        editor.contentEditable = "false";
+      }
     }
     predictionBtn.disabled = true;
     if (overlay) overlay.classList.add("active");
@@ -1109,22 +1250,22 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       {
         title: "Identifikasi tujuan penulisan",
         description: "Menentukan tujuan tulisan dan memilih yang terbaik.",
-        image: "/static/assets/loading%20screen/cat-reads-reading.gif",
+        image: "/static/assets/loading%20screen/type-keyboard.webp",
       },
       {
         title: "Menyusun pertanyaan & mengambil konteks",
         description: "Membangun pertanyaan panduan lalu mengambil jawaban dari riwayat dan esai.",
-        image: "/static/assets/loading%20screen/maxwell-rotate.gif",
+        image: "/static/assets/loading%20screen/type-keyboard.webp",
       },
       {
         title: "Analisis pola & gaya menulis",
         description: "Mencari pola kalimat dan fitur gaya penulisan.",
-        image: "/static/assets/loading%20screen/type-keyboard.gif",
+        image: "/static/assets/loading%20screen/type-keyboard.webp",
       },
       {
         title: "Prediksi & penyempurnaan",
         description: "Menyusun prediksi lalu memilih hasil terbaik.",
-        image: "/static/assets/loading%20screen/1000-yard-stare-cat.gif",
+        image: "/static/assets/loading%20screen/type-keyboard.webp",
       },
     ];
 
@@ -1153,6 +1294,7 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       return `
         <div class="prediction-waiting">
           <img class="prediction-visual" src="${state.image}" alt="${state.title}" />
+          <div class="loader" aria-hidden="true" style="background-size: 0% 100%;"></div>
           <p>${state.title}</p>
         </div>
       `;
@@ -1162,6 +1304,26 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
 
     await preloadLoadingImages();
 
+    const totalDurationMs = loadingStates.length * 20000;
+    let progressIntervalId;
+    let progressStartTime = 0;
+
+    let countdownIntervalId;
+    const countdownTotal = 60;
+    let countdownStartTime = 0;
+
+    const ensureCountdownBadge = (remaining) => {
+      const titleEl = Swal.getTitle();
+      if (!titleEl) return;
+      let badge = titleEl.querySelector(".prediction-countdown");
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "prediction-countdown";
+        titleEl.appendChild(badge);
+      }
+      badge.textContent = `(${remaining}s)`;
+    };
+
     Swal.fire({
       title: "Sedang memprediksi kalimat berikutnya",
       html: buildLoadingHtml(activeStateIndex),
@@ -1169,6 +1331,22 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       allowEscapeKey: false,
       showConfirmButton: false,
       didOpen: () => {
+        countdownStartTime = Date.now();
+        ensureCountdownBadge(countdownTotal);
+        countdownIntervalId = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - countdownStartTime) / 1000);
+          const remaining = Math.max(0, countdownTotal - elapsed);
+          ensureCountdownBadge(remaining);
+        }, 1000);
+        progressStartTime = Date.now();
+        progressIntervalId = setInterval(() => {
+          const elapsed = Date.now() - progressStartTime;
+          const percent = Math.min(100, Math.round((elapsed / totalDurationMs) * 100));
+          const bar = document.querySelector(".loader");
+          if (bar) {
+            bar.style.backgroundSize = `${percent}% 100%`;
+          }
+        }, 200);
         stateIntervalId = setInterval(() => {
           if (activeStateIndex < loadingStates.length - 1) {
             activeStateIndex += 1;
@@ -1180,6 +1358,8 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       },
       willClose: () => {
         clearInterval(stateIntervalId);
+        clearInterval(progressIntervalId);
+        clearInterval(countdownIntervalId);
       },
     });
 
@@ -1242,7 +1422,11 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       if (window.setEditorEditable) {
         window.setEditorEditable(true);
       } else {
-        editor.contentEditable = "true";
+        if (window.setEditorEditable) {
+          window.setEditorEditable(true);
+        } else {
+          editor.contentEditable = "true";
+        }
       }
     }
     if (predictionBtn) predictionBtn.disabled = false;
@@ -1290,6 +1474,10 @@ function initializeSidebar() {
 
 async function handleSubmit() {
   try {
+    if (!(await isPredictionRequirementMet())) {
+      await showPredictionRequirementReminder();
+      return;
+    }
     // 1. Get essayData from sessionStorage
     const essayDataStr = sessionStorage.getItem("essayData");
     if (!essayDataStr) {
@@ -1324,6 +1512,9 @@ async function handleSubmit() {
         window.removeEventListener("beforeunload", beforeUnloadHandler);
         localStorage.removeItem("writingContent");
         sessionStorage.removeItem("essayData");
+        if (window.__TASK_TIMER__?.reset) {
+          window.__TASK_TIMER__.reset();
+        }
 
         await Swal.fire({
           icon: "success",
@@ -1337,12 +1528,15 @@ async function handleSubmit() {
         return;
       }
       // 5. Send submit requent
+      const duration_sec = window.__TASK_TIMER__?.getElapsedSeconds
+        ? window.__TASK_TIMER__.getElapsedSeconds()
+        : 0;
       const response = await fetch(`/submit_hw/${essayData.essay.eid}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, duration_sec }),
       });
 
       // 6. Handle response
@@ -1355,6 +1549,9 @@ async function handleSubmit() {
       window.removeEventListener("beforeunload", beforeUnloadHandler);
       localStorage.removeItem("writingContent");
       sessionStorage.removeItem("essayData");
+      if (window.__TASK_TIMER__?.reset) {
+        window.__TASK_TIMER__.reset();
+      }
 
       await Swal.fire({
         icon: "success",
@@ -1403,9 +1600,9 @@ function updatePrediction() {
   const editor = document.getElementById("editor");
   const predictionBtn = document.getElementById("predictionBtn");
   const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
+  if (!editor || !predictionBtn || !selection || selection.rangeCount === 0) {
     predictionBtn.disabled = true;
-    updatePredictionStatus(editor, false, false);
+    if (editor) updatePredictionStatus(editor, false, false);
     return;
   }
   const range = selection.getRangeAt(0);
@@ -1448,6 +1645,25 @@ function initializePredictionFunction() {
   editor.addEventListener("input", updatePrediction);
   editor.addEventListener("click", updatePrediction);
   editor.addEventListener("keyup", updatePrediction);
+}
+
+function collapseEditorSections() {
+  const editorRoot = document.getElementById("editor");
+  if (!editorRoot) return;
+
+  const sectionEditors = editorRoot.querySelectorAll(".editor-section-field");
+  if (sectionEditors.length) {
+    const combined = Array.from(sectionEditors)
+      .map((section) => section.innerHTML.trim())
+      .filter(Boolean)
+      .join("<div><br></div>");
+    editorRoot.innerHTML = combined;
+  }
+
+  editorRoot.classList.remove("editor-multi");
+  editorRoot.querySelectorAll(".editor-section-label, .section-marker").forEach((el) => {
+    el.remove();
+  });
 }
 
 function getOrdinalSuffix(number) {
@@ -2056,7 +2272,11 @@ function finishPredictionFlow(cardnd, result) {
     if (window.setEditorEditable) {
       window.setEditorEditable(true);
     } else {
-      editor.contentEditable = "true";
+      if (window.setEditorEditable) {
+        window.setEditorEditable(true);
+      } else {
+        editor.contentEditable = "true";
+      }
     }
   }
 }
@@ -2069,7 +2289,11 @@ function endPredictionFlow() {
   if (window.setEditorEditable) {
     window.setEditorEditable(true);
   } else {
-    editor.contentEditable = "true";
+    if (window.setEditorEditable) {
+      window.setEditorEditable(true);
+    } else {
+      editor.contentEditable = "true";
+    }
   }
 
   updatePrediction();

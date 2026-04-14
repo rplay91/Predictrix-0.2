@@ -8,6 +8,12 @@ const CONFIG = {
   ANALYSIS_TIMER: 1000,
 };
 
+const IMAGE_COMPRESS = {
+  MAX_WIDTH: 1024,
+  MAX_HEIGHT: 1024,
+  QUALITY: 0.5,
+};
+
 // Error messages
 const ERROR_MESSAGES = {
   fileType: {
@@ -57,7 +63,7 @@ document.addEventListener("DOMContentLoaded", function () {
         <div class="setup-container">
           <div class="setup-content">
             <div class="page-header">
-              <h1 class="google-style-heading">Tugas 1: Makanan berkesan yang membuat Anda terkesan.</h1>
+              <h1 class="google-style-heading">Tugas 1: Waktu Luang Bersama Keluarga</h1>
               <h2 class="google-style-subheading">Persiapan Menulis</h2>
             </div>
 
@@ -69,13 +75,16 @@ document.addEventListener("DOMContentLoaded", function () {
                 <ol class="instruction-list">
                   <li>
                     <span class="step-number">1</span>
-                    <span class="step-text">Masukkan judul esai yang sesuai dengan topik tugas.</span>
+                    <span class="step-text">Masukkan judul esai yang sesuai dengan topik tugas. misalnya, topik : waktu luang, judul : bermain game bersama teman</span>
                   </li>
                   <li>
                     <span class="step-number">2</span>
                     <span class="step-text">Unggah hingga 3 gambar yang akan digunakan sebagai referensi
                       <ul>
                         <li>Format gambar yang diperbolehkan untuk diunggah adalah ".jpg", ".png", dan ".webp".</li>
+                      </ul>
+                      <ul>
+                        <li>Ukuran Gambar MAKSIMAL 5 MB</li>
                       </ul>
                     </span>                      
                   </li>
@@ -146,7 +155,70 @@ function isValidImageFile(file) {
     });
     return false;
   }
+  const maxSizeBytes = 10 * 1024 * 1024;
+  if (file.size > maxSizeBytes) {
+    Swal.fire({
+      icon: "error",
+      title: "Ukuran File Terlalu Besar",
+      text: "Maksimal ukuran gambar adalah 10 MB.",
+    });
+    return false;
+  }
   return true;
+}
+
+async function compressImageToJpeg(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const img = new Image();
+
+    reader.onload = () => {
+      img.onload = () => {
+        const ratio = Math.min(
+          1,
+          IMAGE_COMPRESS.MAX_WIDTH / img.width,
+          IMAGE_COMPRESS.MAX_HEIGHT / img.height
+        );
+        const width = Math.max(1, Math.round(img.width * ratio));
+        const height = Math.max(1, Math.round(img.height * ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve({ file, dataUrl: reader.result });
+              return;
+            }
+            const compressedFile = new File(
+              [blob],
+              file.name.replace(/\.[^/.]+$/, ".jpg"),
+              { type: "image/jpeg" }
+            );
+            const previewReader = new FileReader();
+            previewReader.onload = () => {
+              resolve({ file: compressedFile, dataUrl: previewReader.result });
+            };
+            previewReader.onerror = reject;
+            previewReader.readAsDataURL(blob);
+          },
+          "image/jpeg",
+          IMAGE_COMPRESS.QUALITY
+        );
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // Add image upload block
@@ -322,40 +394,42 @@ function addKeywordFromInput(index) {
 }
 
 // Handle image upload and preview
-function handleImageUpload(file, index) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
+async function handleImageUpload(file, index) {
+  try {
+    const compressed = await compressImageToJpeg(file);
+    const previewImg = document.getElementById(`imagePreview_${index}`);
+    const imageInput = document.getElementById(`imageUpload_${index}`);
+
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(compressed.file);
+    imageInput.files = dataTransfer.files;
+
     const img = new Image();
     img.onload = () => {
-      const previewImg = document.getElementById(`imagePreview_${index}`);
-      const imageInput = document.getElementById(`imageUpload_${index}`);
-
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      imageInput.files = dataTransfer.files;
-
       const containerWidth = CONFIG.IMAGE_CONTAINER_SIZE;
       const containerHeight = CONFIG.IMAGE_CONTAINER_SIZE;
       let width = img.width;
       let height = img.height;
-
       const ratio = Math.min(containerWidth / width, containerHeight / height);
-
       width *= ratio;
       height *= ratio;
-
       previewImg.style.width = `${width}px`;
       previewImg.style.height = `${height}px`;
-      previewImg.src = e.target.result;
+      previewImg.src = compressed.dataUrl;
 
       document.getElementById(`uploadArea_${index}`).style.display = "none";
       document.getElementById(`cancelUpload_${index}`).style.display = "none";
       document.getElementById(`previewSection_${index}`).style.display =
         "block";
     };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+    img.src = compressed.dataUrl;
+  } catch (error) {
+    Swal.fire({
+      icon: "error",
+      title: "Gagal Memproses Gambar",
+      text: "Silakan coba unggah ulang gambar Anda.",
+    });
+  }
 }
 
 // Image analysis function
@@ -552,9 +626,6 @@ async function validateAndProceed() {
           <br><br>
           Klik "Mulai" saat Anda siap mulai.
         </p>
-        <div class="confirm-button-wrapper">
-          <div class="countdown-overlay"></div>
-        </div>
       </div>
     `,
     icon: "info",
@@ -569,6 +640,7 @@ async function validateAndProceed() {
     confirmButtonDisabled: true,
     didOpen: () => {
       const confirmButton = Swal.getConfirmButton();
+      if (!confirmButton) return;
       confirmButton.disabled = true;
       setTimeout(() => {
         confirmButton.disabled = false;

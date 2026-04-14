@@ -5,6 +5,54 @@ const beforeUnloadHandler = (e) => {
   return e.returnValue;
 };
 
+const MIN_PREDICTION_ATTEMPTS = 3;
+
+function getPredictionAttemptKey() {
+  const essayData = JSON.parse(sessionStorage.getItem("essayData") || "{}");
+  const eid = essayData?.essay?.eid || sessionStorage.getItem("currentEid") || "unknown";
+  return `predictionAttempts:${eid}`;
+}
+
+function getPredictionAttemptCount() {
+  const key = getPredictionAttemptKey();
+  return Number.parseInt(sessionStorage.getItem(key) || "0", 10);
+}
+
+function incrementPredictionAttempt() {
+  const key = getPredictionAttemptKey();
+  const nextCount = getPredictionAttemptCount() + 1;
+  sessionStorage.setItem(key, String(nextCount));
+  return nextCount;
+}
+
+async function isPredictionRequirementMet() {
+  const predictionBtn = document.getElementById("predictionBtn");
+  if (!predictionBtn) return true;
+  try {
+    const essayData = JSON.parse(sessionStorage.getItem("essayData") || "{}");
+    const eid = essayData?.essay?.eid;
+    if (!eid) return getPredictionAttemptCount() >= MIN_PREDICTION_ATTEMPTS;
+    const response = await fetch(`/load_hw_data/${eid}`);
+    if (!response.ok) return getPredictionAttemptCount() >= MIN_PREDICTION_ATTEMPTS;
+    const result = await response.json();
+    const count = Array.isArray(result?.data?.predictions)
+      ? result.data.predictions.length
+      : 0;
+    return count >= MIN_PREDICTION_ATTEMPTS;
+  } catch {
+    return getPredictionAttemptCount() >= MIN_PREDICTION_ATTEMPTS;
+  }
+}
+
+async function showPredictionRequirementReminder() {
+  return await Swal.fire({
+    title: "Gunakan Fitur Prediksi",
+    text: `Silakan coba fitur prediksi minimal ${MIN_PREDICTION_ATTEMPTS} kali sebelum mengumpulkan esai.`,
+    icon: "warning",
+    confirmButtonText: "OK",
+  });
+}
+
 async function checkHomeworkStatus(sid) {
   try {
     // console.log("Checking homework status for sid:", sid);
@@ -145,6 +193,7 @@ function initializePage() {
     }
 
     createInterface();
+    initializeTaskTimerUi();
 
     document.querySelectorAll(".instruction-box").forEach((box) => {
       box.addEventListener("click", function () {
@@ -323,8 +372,8 @@ function createInterface() {
               <div class="area-title"> Area Menulis </div>
               <div id="wordCounter" class="word-counter"></div>
             </div>
-            <div class="editor-container">
-              <div id="editor" class="editor" contenteditable="true"></div>
+          <div class="editor-container">
+              <div id="editor" class="editor"></div>
             </div>
           </div>
 
@@ -370,8 +419,8 @@ function createInterface() {
 }
 
 function setupWordCounter() {
-  const editor = document.getElementById("editor");
-  if (!editor) {
+  const editorRoot = document.getElementById("editor");
+  if (!editorRoot) {
     return;
   }
 
@@ -403,28 +452,41 @@ function setupWordCounter() {
     return cleaned.split(" ").length;
   };
 
+
   const getState = (count) => {
-    if (count < 200) {
+    if (count < 150) {
       return { emoji: "😢" };
     }
-    if (count < 300) {
-      return { emoji: "😢" };
+    if (count < 200) {
+      return { emoji: "😐" };
     }
     if (count < 500) {
-      return { emoji: "😐" };
+      return { emoji: "😊" };
     }
     return { emoji: "😊" };
   };
 
+
   const updateCounter = () => {
-    const count = getWordCount(editor.textContent);
+    const combinedText = window.getCombinedEditorText
+      ? window.getCombinedEditorText()
+      : editorRoot.textContent;
+    const count = getWordCount(combinedText);
     const state = getState(count);
     if (emojiEl) emojiEl.textContent = state.emoji;
     if (textEl) textEl.textContent = `${count} kata`;
   };
 
-  editor.addEventListener("input", updateCounter);
-  editor.addEventListener("keyup", updateCounter);
+  const sectionEditors = editorRoot.querySelectorAll(".editor-section-field");
+  if (sectionEditors.length) {
+    sectionEditors.forEach((section) => {
+      section.addEventListener("input", updateCounter);
+      section.addEventListener("keyup", updateCounter);
+    });
+  } else {
+    editorRoot.addEventListener("input", updateCounter);
+    editorRoot.addEventListener("keyup", updateCounter);
+  }
   updateCounter();
 }
 
@@ -448,10 +510,17 @@ function setupEditorFontSlider() {
       <input id="editorFontSlider" type="range" min="12" max="24" step="1" />
       <span id="editorFontValue">16px</span>
     `;
-    const toolbar = container.querySelector(".editor-toolbar");
-    if (toolbar) {
-      toolbar.appendChild(control);
-    } else {
+  const toolbarContainer = container.previousElementSibling?.classList.contains(
+    "editor-toolbar-container"
+  )
+    ? container.previousElementSibling
+    : container.parentElement?.querySelector(".editor-toolbar-container");
+  const toolbar =
+    toolbarContainer?.querySelector(".editor-toolbar") ||
+    container.parentElement?.querySelector(".editor-toolbar");
+  if (toolbar) {
+    toolbar.appendChild(control);
+  } else {
       container.appendChild(control);
     }
   }
@@ -606,6 +675,78 @@ async function handleSave() {
     });
   }
 }
+
+function initializeTaskTimerUi() {
+  const headerRight = document.querySelector(".writing-header .header-right");
+  if (!headerRight) return;
+
+  let timerEl = document.querySelector(".task-timer");
+  if (!timerEl) {
+    timerEl = document.createElement("div");
+    timerEl.className = "task-timer";
+    headerRight.prepend(timerEl);
+  }
+
+  const formatTime = (totalSeconds) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(seconds).padStart(2, "0")}`;
+  };
+
+  const update = () => {
+    const elapsed = window.__TASK_TIMER__?.getElapsedSeconds
+      ? window.__TASK_TIMER__.getElapsedSeconds()
+      : 0;
+    timerEl.textContent = `Durasi: ${formatTime(elapsed)}`;
+  };
+
+  update();
+  setInterval(update, 1000);
+}
+
+async function saveDraftSilently() {
+  try {
+    const essayDataStr = sessionStorage.getItem("essayData");
+    if (!essayDataStr) return;
+    const essayData = JSON.parse(essayDataStr);
+    if (!essayData?.essay?.eid) return;
+    const eid = essayData.essay.eid;
+    const editor = window.getActiveEditorElement
+      ? window.getActiveEditorElement()
+      : document.querySelector(".editor-section-field") || document.getElementById("editor");
+    if (!editor) return;
+    const content = (window.getEditorContentForSave ? window.getEditorContentForSave() : editor.innerHTML);
+    const duration_sec = window.__TASK_TIMER__?.getElapsedSeconds
+      ? window.__TASK_TIMER__.getElapsedSeconds()
+      : 0;
+    const response = await fetch(`/save_hw_content/${eid}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content, duration_sec }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!result?.success) return;
+    essayData.essay.content = content;
+    sessionStorage.setItem("essayData", JSON.stringify(essayData));
+    localStorage.setItem(
+      "writingContent",
+      JSON.stringify({
+        title: document.getElementById("articleTitle").textContent,
+        content: content,
+      })
+    );
+  } catch {
+    // Silent fail.
+  }
+}
+
+window.__AUTO_SAVE__ = saveDraftSilently;
 
 function initializeResources(images) {
   const container = document.querySelector(
@@ -804,6 +945,7 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
 
   async function handlePrediction() {
     try {
+    incrementPredictionAttempt();
     const editor = document.getElementById("editor");
     const predictionBtn = document.getElementById("predictionBtn");
     const markedText = document.getElementById("markedText");
@@ -829,9 +971,9 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       throw new Error("Silakan pilih area ini terlebih dahulu.");
     }
 
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = editor.innerHTML;
-    const currentEnnayContent = tempDiv.innerText;
+    const currentEnnayContent = window.getCombinedEditorText
+      ? window.getCombinedEditorText()
+      : editor.textContent;
     const titleElement = document.getElementById("articleTitle");
     const title = titleElement ? titleElement.textContent : "";
 
@@ -868,7 +1010,11 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
     if (window.setEditorEditable) {
       window.setEditorEditable(false);
     } else {
-      editor.contentEditable = "false";
+      if (window.setEditorEditable) {
+        window.setEditorEditable(false);
+      } else {
+        editor.contentEditable = "false";
+      }
     }
     predictionBtn.disabled = true;
     if (overlay) overlay.classList.add("active");
@@ -879,22 +1025,22 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       {
         title: "Identifikasi tujuan penulisan",
         description: "Menentukan tujuan tulisan dan memilih yang terbaik.",
-        image: "/static/assets/loading%20screen/cat-reads-reading.gif",
+        image: "/static/assets/loading%20screen/type-keyboard.webp",
       },
       {
         title: "Menyusun pertanyaan & mengambil konteks",
         description: "Membangun pertanyaan panduan lalu mengambil jawaban dari riwayat dan esai.",
-        image: "/static/assets/loading%20screen/maxwell-rotate.gif",
+        image: "/static/assets/loading%20screen/type-keyboard.webp",
       },
       {
         title: "Analisis pola & gaya menulis",
         description: "Mencari pola kalimat dan fitur gaya penulisan.",
-        image: "/static/assets/loading%20screen/type-keyboard.gif",
+        image: "/static/assets/loading%20screen/type-keyboard.webp",
       },
       {
         title: "Prediksi & penyempurnaan",
         description: "Menyusun prediksi lalu memilih hasil terbaik.",
-        image: "/static/assets/loading%20screen/1000-yard-stare-cat.gif",
+        image: "/static/assets/loading%20screen/type-keyboard.webp",
       },
     ];
 
@@ -923,6 +1069,7 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       return `
         <div class="prediction-waiting">
           <img class="prediction-visual" src="${state.image}" alt="${state.title}" />
+          <div class="loader" aria-hidden="true" style="background-size: 0% 100%;"></div>
           <p>${state.title}</p>
         </div>
       `;
@@ -932,13 +1079,49 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
 
     await preloadLoadingImages();
 
+    const totalDurationMs = loadingStates.length * 20000;
+    let progressIntervalId;
+    let progressStartTime = 0;
+
+    let countdownIntervalId;
+    const countdownTotal = 60;
+    let countdownStartTime = 0;
+
+    const ensureCountdownBadge = (remaining) => {
+      const titleEl = Swal.getTitle();
+      if (!titleEl) return;
+      let badge = titleEl.querySelector(".prediction-countdown");
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "prediction-countdown";
+        titleEl.appendChild(badge);
+      }
+      badge.textContent = `(${remaining}s)`;
+    };
+
     Swal.fire({
-      title: "Sedang memprediksi kalimat berikutnya",
+      title: "Sedang memprediksi kalimat",
       html: buildLoadingHtml(activeStateIndex),
       allowOutsideClick: false,
       allowEscapeKey: false,
       showConfirmButton: false,
       didOpen: () => {
+        countdownStartTime = Date.now();
+        ensureCountdownBadge(countdownTotal);
+        countdownIntervalId = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - countdownStartTime) / 1000);
+          const remaining = Math.max(0, countdownTotal - elapsed);
+          ensureCountdownBadge(remaining);
+        }, 1000);
+        progressStartTime = Date.now();
+        progressIntervalId = setInterval(() => {
+          const elapsed = Date.now() - progressStartTime;
+          const percent = Math.min(100, Math.round((elapsed / totalDurationMs) * 100));
+          const bar = document.querySelector(".loader");
+          if (bar) {
+            bar.style.backgroundSize = `${percent}% 100%`;
+          }
+        }, 200);
         stateIntervalId = setInterval(() => {
           if (activeStateIndex < loadingStates.length - 1) {
             activeStateIndex += 1;
@@ -950,6 +1133,8 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       },
       willClose: () => {
         clearInterval(stateIntervalId);
+        clearInterval(progressIntervalId);
+        clearInterval(countdownIntervalId);
       },
     });
 
@@ -1015,7 +1200,11 @@ function updatePredictionStatus(editor, isValidPosition, hasValidEnding) {
       if (window.setEditorEditable) {
         window.setEditorEditable(true);
       } else {
-        editor.contentEditable = "true";
+        if (window.setEditorEditable) {
+          window.setEditorEditable(true);
+        } else {
+          editor.contentEditable = "true";
+        }
       }
     }
 
@@ -1062,8 +1251,142 @@ function initializeSidebar() {
   createPredictionPanel();
 }
 
+async function fetchPredictionHistory(eid) {
+  try {
+    const response = await fetch(`/load_hw_data/${eid}`);
+    if (!response.ok) {
+      return [];
+    }
+    const result = await response.json();
+    if (!result?.success || !result?.data?.predictions) {
+      return [];
+    }
+    return result.data.predictions;
+  } catch {
+    return [];
+  }
+}
+
+async function showSubmissionFeedbackDialog(eid) {
+  const predictionData = await fetchPredictionHistory(eid);
+  const predictions = predictionData.map((pred, index) => ({
+    pid: pred.pid || null,
+    text: (pred.pcontent || "").trim(),
+    index,
+  }));
+
+  const likert = (name) => `
+    <div class="feedback-likert" role="radiogroup" aria-label="${name}">
+      ${[
+        { value: 1, label: "😞" },
+        { value: 2, label: "😕" },
+        { value: 3, label: "😐" },
+        { value: 4, label: "🙂" },
+        { value: 5, label: "🤩" },
+      ]
+        .map(
+          (item) => `
+        <label class="feedback-option">
+          <input type="radio" name="${name}" value="${item.value}" />
+          <span>${item.label}</span>
+        </label>
+      `
+        )
+        .join("")}
+    </div>
+  `;
+
+  const predictionsHtml = predictions.length
+    ? predictions
+        .map(
+          (pred) => `
+          <div class="feedback-prediction">
+            <div class="feedback-prediction-text">${pred.text || "(Tidak ada teks)"}</div>
+            ${likert(`pred-rating-${pred.index}`)}
+            <textarea id="pred-comment-${pred.index}" class="swal2-textarea feedback-comment" placeholder="Komentar untuk prediksi ini (wajib)"></textarea>
+          </div>
+        `
+        )
+        .join("")
+    : `<div class="feedback-empty">Belum ada riwayat prediksi.</div>`;
+
+  const html = `
+    <div class="feedback-form">
+      <div class="feedback-question">
+        <div class="feedback-title">1. Sistem prediksi dapat membantu saya dalam mengembangkan konten esai</div>
+        ${likert("q1")}
+        <textarea id="q1-comment" class="swal2-textarea feedback-comment" placeholder="Komentar singkat (opsional)"></textarea>
+      </div>
+      <div class="feedback-question">
+        <div class="feedback-title">2. Sistem prediksi dapat membantu ide penulisan saya</div>
+        ${likert("q2")}
+        <textarea id="q2-comment" class="swal2-textarea feedback-comment" placeholder="Komentar singkat (opsional)"></textarea>
+      </div>
+      <div class="feedback-question">
+        <div class="feedback-title">3. Beri nilai pada hasil prediksi</div>
+        ${predictionsHtml}
+      </div>
+      <div class="feedback-question">
+        <div class="feedback-title">4. Saran dan masukan</div>
+        <textarea id="suggestion" class="swal2-textarea feedback-comment" placeholder="Tulis saran dan masukan Anda (wajib)"></textarea>
+      </div>
+    </div>
+  `;
+
+  const result = await Swal.fire({
+    title: "Konfirmasi Pengumpulan",
+    html,
+    showCancelButton: true,
+    confirmButtonText: "Kumpulkan",
+    cancelButtonText: "Batal",
+    focusConfirm: false,
+    width: 860,
+    preConfirm: () => {
+      const q1 = document.querySelector('input[name="q1"]:checked')?.value;
+      const q2 = document.querySelector('input[name="q2"]:checked')?.value;
+      if (!q1 || !q2) {
+        Swal.showValidationMessage("Mohon isi penilaian untuk pertanyaan 1 dan 2.");
+        return false;
+      }
+      const q1Comment = (document.getElementById("q1-comment")?.value || "").trim();
+      const q2Comment = (document.getElementById("q2-comment")?.value || "").trim();
+      const suggestion = (document.getElementById("suggestion")?.value || "").trim();
+      if (!suggestion) {
+        Swal.showValidationMessage("Saran dan masukan wajib diisi.");
+        return false;
+      }
+      const predComments = predictions.map((pred) => ({
+        pid: pred.pid,
+        text: pred.text,
+        rating: Number(
+          document.querySelector(`input[name="pred-rating-${pred.index}"]:checked`)?.value
+        ),
+        comment: (document.getElementById(`pred-comment-${pred.index}`)?.value || "").trim(),
+      }));
+      if (predComments.some((p) => !p.rating || !p.comment)) {
+        Swal.showValidationMessage("Mohon isi nilai dan komentar untuk setiap prediksi.");
+        return false;
+      }
+      return {
+        q1_rating: Number(q1),
+        q1_comment: q1Comment,
+        q2_rating: Number(q2),
+        q2_comment: q2Comment,
+        predictions: predComments,
+        suggestion,
+      };
+    },
+  });
+
+  return result.isConfirmed ? result.value : null;
+}
+
 async function handleSubmit() {
   try {
+    if (!(await isPredictionRequirementMet())) {
+      await showPredictionRequirementReminder();
+      return;
+    }
     // 1. Get essayData from sessionStorage
     const essayDataStr = sessionStorage.getItem("essayData");
     if (!essayDataStr) {
@@ -1083,24 +1406,30 @@ async function handleSubmit() {
     }
     const content = (window.getEditorContentForSave ? window.getEditorContentForSave() : editor.innerHTML);
 
-    // 4. Show confirmation dialog
-    const result = await Swal.fire({
-      title: "Konfirmasi Pengumpulan",
-      text: "Apakah Anda ingin mengumpulkan esai? Anda tidak dapat mengeditnya setelah dikumpulkan.",
-      icon: "quention",
-      showCancelButton: true,
-      confirmButtonText: "Kumpulkan",
-      cancelButtonText: "Batal",
-    });
-
-    if (result.isConfirmed) {
+    const feedback = await showSubmissionFeedbackDialog(essayData.essay.eid);
+    if (feedback) {
+      const sid = sessionStorage.getItem("sid") || "";
+      const task_type = window.__TASK_TYPE__ || "hw2";
+      fetch("/submit_hw_feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eid: Number(essayData.essay.eid),
+          sid,
+          task_type,
+          ...feedback,
+        }),
+      }).catch(() => {});
       // 5. Send submit requent
+      const duration_sec = window.__TASK_TIMER__?.getElapsedSeconds
+        ? window.__TASK_TIMER__.getElapsedSeconds()
+        : 0;
       const response = await fetch(`/submit_hw/${essayData.essay.eid}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, duration_sec }),
       });
 
       // 6. Handle response
@@ -1113,6 +1442,9 @@ async function handleSubmit() {
       window.removeEventListener("beforeunload", beforeUnloadHandler);
       localStorage.removeItem("writingContent");
       sessionStorage.removeItem("essayData");
+      if (window.__TASK_TIMER__?.reset) {
+        window.__TASK_TIMER__.reset();
+      }
 
       await Swal.fire({
         icon: "success",
@@ -1158,12 +1490,14 @@ function normalizeText(text) {
 }
 
 function updatePrediction() {
-  const editor = document.getElementById("editor");
+  const editor = window.getActiveEditorElement
+    ? window.getActiveEditorElement()
+    : document.querySelector(".editor-section-field") || document.getElementById("editor");
   const predictionBtn = document.getElementById("predictionBtn");
   const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
+  if (!editor || !predictionBtn || !selection || selection.rangeCount === 0) {
     predictionBtn.disabled = true;
-    updatePredictionStatus(editor, false, false);
+    if (editor) updatePredictionStatus(editor, false, false);
     return;
   }
   const range = selection.getRangeAt(0);
@@ -1767,7 +2101,11 @@ function finishPredictionFlow(cardnd, result) {
     if (window.setEditorEditable) {
       window.setEditorEditable(true);
     } else {
-      editor.contentEditable = "true";
+      if (window.setEditorEditable) {
+        window.setEditorEditable(true);
+      } else {
+        editor.contentEditable = "true";
+      }
     }
   }
 }
@@ -1780,7 +2118,11 @@ function endPredictionFlow() {
   if (window.setEditorEditable) {
     window.setEditorEditable(true);
   } else {
-    editor.contentEditable = "true";
+    if (window.setEditorEditable) {
+      window.setEditorEditable(true);
+    } else {
+      editor.contentEditable = "true";
+    }
   }
 
   updatePrediction();

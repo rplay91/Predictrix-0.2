@@ -5,6 +5,33 @@ const beforeUnloadHandler = (e) => {
   return e.returnValue;
 };
 
+const MIN_PREDICTION_ATTEMPTS = 3;
+
+function getPredictionAttemptKey() {
+  const eid = sessionStorage.getItem("currentEid") || "unknown";
+  return `predictionAttempts:${eid}`;
+}
+
+function getPredictionAttemptCount() {
+  const key = getPredictionAttemptKey();
+  return Number.parseInt(sessionStorage.getItem(key) || "0", 10);
+}
+
+function isPredictionRequirementMet() {
+  const predictionBtn = document.getElementById("predictionBtn");
+  if (!predictionBtn) return true;
+  return getPredictionAttemptCount() >= MIN_PREDICTION_ATTEMPTS;
+}
+
+async function showPredictionRequirementReminder() {
+  return await Swal.fire({
+    title: "Gunakan Fitur Prediksi",
+    text: `Silakan coba fitur prediksi minimal ${MIN_PREDICTION_ATTEMPTS} kali sebelum mengumpulkan esai.`,
+    icon: "warning",
+    confirmButtonText: "OK",
+  });
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   // console.log("Page loaded, checking login status...");
 
@@ -153,37 +180,30 @@ async function showStartConfirmation() {
     allowOutsideClick: false,
     allowEscapeKey: false,
     reverseButtons: false,
-    didOpen: () => {
-      const confirmButton = Swal.getConfirmButton();
-      confirmButton.disabled = true;
-      setTimeout(() => {
-        confirmButton.disabled = false;
-      }, 5000);
-    },
   });
 }
 
 function initializePage() {
   const demoData = {
-    title: "Memperkenalkan Lebaran di Indonesia",
+    title: "Kegiatan Liburan",
     images: [
       {
-        url: "/static/assets/img/post-test_1.webp",
-        keywords: ["prayer", "traditional clothes", "community", "religion"],
+        url: "/static/assets/img/liburan-1.jpeg",
+        keywords: ["pantai", "matahari", "pasir", "bersantai"],
         description:
-          "Umat Muslim mengenakan pakaian tradisional dan menghadap masjid untuk menunaikan salat Idulfitri.",
+          "Kegiatan liburan di pantai sambil menikmati udara segar dan suasana santai bersama keluarga.",
       },
       {
-        url: "/static/assets/img/post-test_2.png",
-        keywords: ["reunion", "celebration", "togetherness", "travel"],
+        url: "/static/assets/img/liburan-2.jpeg",
+        keywords: ["wisata alam", "pegunungan", "jalan-jalan", "pemandangan"],
         description:
-          "Keluarga Indonesia berkumpul saat Lebaran karena banyak orang pulang kampung untuk merayakan hari raya bersama orang terkasih.",
+          "Liburan ke kawasan pegunungan untuk menikmati pemandangan alam dan udara yang sejuk.",
       },
       {
-        url: "/static/assets/img/post-test_3.jpg",
-        keywords: ["parent", "envelope", "receive", "blessing", "generous"],
+        url: "/static/assets/img/liburan-3.jpeg",
+        keywords: ["kuliner", "rekreasi", "keluarga", "kebersamaan"],
         description:
-          "Seorang orang tua di Indonesia memberikan amplop berisi uang THR kepada dua anak saat Lebaran, disertai doa dan berkat.",
+          "Menjelajahi kuliner lokal dan menikmati waktu bersama keluarga saat liburan.",
       },
     ],
   };
@@ -239,7 +259,7 @@ function createInterface() {
                 <span>Petunjuk</span>
               </div>
               <div class="instruction-content">
-                <p>Lebaran adalah hari raya terpenting di Indonesia yang menandai berakhirnya bulan puasa Ramadan. Momen ini juga menjadi waktu bagi masyarakat Indonesia untuk menikmati kebersamaan bersama keluarga dan teman. Gambar-gambar berikut menunjukkan kegiatan khas saat Lebaran. Tulislah esai untuk memperkenalkan Lebaran di Indonesia kepada pembaca.</p>
+                <p>Liburan menjadi waktu yang tepat untuk beristirahat dan menikmati kebersamaan. Gambar-gambar berikut menunjukkan beragam kegiatan liburan. Tulislah esai untuk menceritakan kegiatan liburan kepada pembaca.</p>
                 <p>Ikuti panduan berikut saat menulis:</p>
                 <li>Tulislah esai berdasarkan Judul dan informasi Konteks yang disediakan.</li>
                 <li>Tulislah setidaknya 150 kata.</li>
@@ -406,7 +426,7 @@ function setupWordCounter() {
   }
   if (!counter.innerHTML) {
     counter.innerHTML = `
-      <span id="wordCounterEmoji" style="font-size:18px;">??</span>\n      <span id="wordCounterText">0 kata</span>
+      <span id="wordCounterEmoji" style="font-size:18px;"> </span>\n      <span id="wordCounterText">0 kata</span>
     `;
   }
 
@@ -421,15 +441,15 @@ function setupWordCounter() {
 
   const getState = (count) => {
     if (count < 200) {
-      return { emoji: "??" };
+      return { emoji: "" };
     }
     if (count < 300) {
-      return { emoji: "??" };
+      return { emoji: "" };
     }
     if (count < 500) {
-      return { emoji: "??" };
+      return { emoji: "" };
     }
-    return { emoji: "??" };
+    return { emoji: "" };
   };
 
   const updateCounter = () => {
@@ -582,6 +602,10 @@ async function updateEssayContent() {
 }
 
 function handleSubmit() {
+  if (!isPredictionRequirementMet()) {
+    showPredictionRequirementReminder();
+    return;
+  }
   Swal.fire({
     title: "Konfirmasi Pengumpulan",
     text: "Apakah Anda ingin mengumpulkan esai? Anda tidak dapat mengeditnya setelah dikumpulkan.",

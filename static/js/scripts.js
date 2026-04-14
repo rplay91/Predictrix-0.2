@@ -58,6 +58,18 @@ window.addEventListener("DOMContentLoaded", (event) => {
                   </div>
                   Tugas 2
                 </a>
+                <a class="nav-link" href="/hw3_writing">
+                  <div class="sb-nav-link-icon">
+                    <i class="fas fa-book-open"></i>
+                  </div>
+                  Tugas 3
+                </a>
+                <a class="nav-link" href="/hw4_writing">
+                  <div class="sb-nav-link-icon">
+                    <i class="fas fa-book-open"></i>
+                  </div>
+                  Tugas 4
+                </a>
                 <a class="nav-link" href="/test2_writing">
                   <div class="sb-nav-link-icon">
                     <i class="fas fa-columns"></i>

@@ -233,6 +233,90 @@ def initialize_homework2_essay(sid: str, title: str) -> Dict[str, any]:
             connection.close()
 
 
+def initialize_homework3_essay(sid: str, title: str) -> Dict[str, any]:
+    """
+    Inisialisasi esai tugas 3.
+    """
+    connection = None
+    try:
+        connection = pymysql.connect(**DB_CONFIG)
+        with connection.cursor() as cursor:
+            sql1 = """
+                INSERT INTO essay_info (topic, content, start_time)
+                VALUES (%s, '', NOW())
+            """
+            cursor.execute(sql1, (title,))
+
+            eid = cursor.lastrowid
+
+            sql2 = """
+                INSERT INTO essay_state (sid, eid, source, state)
+                VALUES (%s, %s, 'Homework3', 'Editing')
+            """
+            cursor.execute(sql2, (sid, eid))
+
+            connection.commit()
+            return {
+                "success": True,
+                "eid": eid,
+                "message": "Esai tugas 3 berhasil diinisialisasi",
+            }
+
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        return {
+            "success": False,
+            "error": f"Gagal menginisialisasi esai tugas 3: {str(e)}",
+        }
+
+    finally:
+        if connection:
+            connection.close()
+
+
+def initialize_homework4_essay(sid: str, title: str) -> Dict[str, any]:
+    """
+    Inisialisasi esai tugas 4.
+    """
+    connection = None
+    try:
+        connection = pymysql.connect(**DB_CONFIG)
+        with connection.cursor() as cursor:
+            sql1 = """
+                INSERT INTO essay_info (topic, content, start_time)
+                VALUES (%s, '', NOW())
+            """
+            cursor.execute(sql1, (title,))
+
+            eid = cursor.lastrowid
+
+            sql2 = """
+                INSERT INTO essay_state (sid, eid, source, state)
+                VALUES (%s, %s, 'Homework4', 'Editing')
+            """
+            cursor.execute(sql2, (sid, eid))
+
+            connection.commit()
+            return {
+                "success": True,
+                "eid": eid,
+                "message": "Esai tugas 4 berhasil diinisialisasi",
+            }
+
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        return {
+            "success": False,
+            "error": f"Gagal menginisialisasi esai tugas 4: {str(e)}",
+        }
+
+    finally:
+        if connection:
+            connection.close()
+
+
 def save_hw_images(eid: str, images: List[dict]) -> dict:
     """
     Menyimpan informasi gambar untuk tugas.

@@ -1,5 +1,6 @@
 import re
 import pymysql
+import json
 from db_config import DB_CONFIG
 
 
@@ -66,6 +67,74 @@ def check_hw2_status(sid: str) -> dict:
                 FROM essay_state
                 WHERE sid = %s 
                 AND source = 'Homework2'
+                AND state != 'Cancel';
+            """
+            cursor.execute(sql, (sid,))
+            result = cursor.fetchone()
+            
+            return {
+                'hasEssay': bool(result),
+                'state': result['state'] if result else None,
+                'eid': result['eid'] if result else None
+            }
+            
+    except Exception as e:
+        print(f"Error checking homework status: {str(e)}")
+        return {
+            'hasEssay': False,
+            'state': None,
+            'eid': None
+        }
+        
+    finally:
+        if connection:
+            connection.close()
+
+def check_hw3_status(sid: str) -> dict:
+    """Return homework 3 status information for a student."""
+    connection = None
+    try:
+        connection = pymysql.connect(**DB_CONFIG)
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT state, eid
+                FROM essay_state
+                WHERE sid = %s 
+                AND source = 'Homework3'
+                AND state != 'Cancel';
+            """
+            cursor.execute(sql, (sid,))
+            result = cursor.fetchone()
+            
+            return {
+                'hasEssay': bool(result),
+                'state': result['state'] if result else None,
+                'eid': result['eid'] if result else None
+            }
+            
+    except Exception as e:
+        print(f"Error checking homework status: {str(e)}")
+        return {
+            'hasEssay': False,
+            'state': None,
+            'eid': None
+        }
+        
+    finally:
+        if connection:
+            connection.close()
+
+def check_hw4_status(sid: str) -> dict:
+    """Return homework 4 status information for a student."""
+    connection = None
+    try:
+        connection = pymysql.connect(**DB_CONFIG)
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT state, eid
+                FROM essay_state
+                WHERE sid = %s 
+                AND source = 'Homework4'
                 AND state != 'Cancel';
             """
             cursor.execute(sql, (sid,))
@@ -192,7 +261,7 @@ def load_hw_data(eid: str) -> dict:
         if connection:
             connection.close()
 
-def save_hw_content(eid: str, content: str) -> dict:
+def save_hw_content(eid: str, content: str, duration_sec: int | None = None) -> dict:
     """儲存文章內容
     
     Args:
@@ -210,12 +279,21 @@ def save_hw_content(eid: str, content: str) -> dict:
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            sql = """
-                UPDATE essay_info
-                SET content = %s
-                WHERE eid = %s;
-            """
-            cursor.execute(sql, (content, eid))
+            if duration_sec is None:
+                sql = """
+                    UPDATE essay_info
+                    SET content = %s
+                    WHERE eid = %s;
+                """
+                cursor.execute(sql, (content, eid))
+            else:
+                sql = """
+                    UPDATE essay_info
+                    SET content = %s,
+                        duration_sec = %s
+                    WHERE eid = %s;
+                """
+                cursor.execute(sql, (content, duration_sec, eid))
             connection.commit()
             
             return {
@@ -233,7 +311,7 @@ def save_hw_content(eid: str, content: str) -> dict:
         if connection:
             connection.close()
 
-def submit_hw(eid: str, content: str) -> dict:
+def submit_hw(eid: str, content: str, duration_sec: int | None = None) -> dict:
     """提交作業
     
     Args:
@@ -253,12 +331,21 @@ def submit_hw(eid: str, content: str) -> dict:
         
         try:
             # NOTE: Comment replaced (original text contained non-English characters).
-            sql1 = """
-                UPDATE essay_info
-                SET content = %s
-                WHERE eid = %s
-            """
-            cursor.execute(sql1, (content, eid))
+            if duration_sec is None:
+                sql1 = """
+                    UPDATE essay_info
+                    SET content = %s
+                    WHERE eid = %s
+                """
+                cursor.execute(sql1, (content, eid))
+            else:
+                sql1 = """
+                    UPDATE essay_info
+                    SET content = %s,
+                        duration_sec = %s
+                    WHERE eid = %s
+                """
+                cursor.execute(sql1, (content, duration_sec, eid))
             
             # NOTE: Comment replaced (original text contained non-English characters).
             sql2 = """
@@ -524,6 +611,50 @@ def update_prediction_check_count(pid: str) -> dict:
             'error': f'更新查看次數失敗: {str(e)}'
         }
         
+    finally:
+        if connection:
+            connection.close()
+
+def save_homework_feedback(feedback: dict) -> dict:
+    connection = None
+    try:
+        connection = pymysql.connect(**DB_CONFIG)
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO essay_feedback (
+                    eid,
+                    sid,
+                    task_type,
+                    q1_rating,
+                    q1_comment,
+                    q2_rating,
+                    q2_comment,
+                    predictions_json,
+                    suggestion,
+                    created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            """
+            cursor.execute(
+                sql,
+                (
+                    feedback.get("eid"),
+                    feedback.get("sid"),
+                    feedback.get("task_type"),
+                    feedback.get("q1_rating"),
+                    feedback.get("q1_comment"),
+                    feedback.get("q2_rating"),
+                    feedback.get("q2_comment"),
+                    json.dumps(feedback.get("predictions") or []),
+                    feedback.get("suggestion"),
+                ),
+            )
+            connection.commit()
+        return {"success": True}
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        return {"success": False, "error": str(e)}
     finally:
         if connection:
             connection.close()

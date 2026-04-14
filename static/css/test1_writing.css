@@ -677,6 +677,14 @@ body {
   border-radius: 2px;
 }
 
+.loader {
+  width: 120px;
+  height: 20px;
+  background: linear-gradient(#000 0 0) 0/0% no-repeat #ddd;
+  margin: 8px auto 4px;
+  border-radius: 4px;
+}
+
 .text-align-left-popup .swal2-html-container {
   text-align: left !important;
 }

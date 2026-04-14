@@ -26,6 +26,8 @@ function translateEssaySource(source) {
     "Previous post-test": "Post-Test Sebelumnya",
     "Homework 1": "Tugas 1",
     "Homework 2": "Tugas 2",
+    "Homework 3": "Tugas 3",
+    "Homework 4": "Tugas 4",
   };
   return sourceMap[source] || source || "Tanpa Sumber";
 }
@@ -41,6 +43,8 @@ const SOURCE_TO_KEY = {
   pretest: ["Pre-test", "Pre Test", "Pretest", "Pre-Test", "Pre-Test Sebelumnya", "Previous pre-test"],
   hw1: ["Homework 1", "Homework1", "Tugas 1", "Tugas1", "HomeWork 1", "HomeWork1"],
   hw2: ["Homework 2", "Homework2", "Tugas 2", "Tugas2", "HomeWork 2", "HomeWork2"],
+  hw3: ["Homework 3", "Homework3", "Tugas 3", "Tugas3", "HomeWork 3", "HomeWork3"],
+  hw4: ["Homework 4", "Homework4", "Tugas 4", "Tugas4", "HomeWork 4", "HomeWork4"],
   posttest: ["Post-test", "Post Test", "Posttest", "Post-Test", "Post-Test Sebelumnya", "Previous post-test"],
 };
 
@@ -61,16 +65,20 @@ async function fetchTaskStatuses(sid) {
     }
   };
 
-  const [pretestRes, hw1Res, hw2Res, posttestRes] = await Promise.all([
+  const [pretestRes, hw1Res, hw2Res, hw3Res, hw4Res, posttestRes] = await Promise.all([
     fetch(`/check_pretest_status/${sid}`),
     fetch(`/check_hw1_status/${sid}`),
     fetch(`/check_hw2_status/${sid}`),
+    fetch(`/check_hw3_status/${sid}`),
+    fetch(`/check_hw4_status/${sid}`),
     fetch(`/check_posttest_status/${sid}`),
   ]);
 
   const pretest = pretestRes.ok ? await safeJson(pretestRes) : null;
   const hw1 = hw1Res.ok ? await safeJson(hw1Res) : null;
   const hw2 = hw2Res.ok ? await safeJson(hw2Res) : null;
+  const hw3 = hw3Res.ok ? await safeJson(hw3Res) : null;
+  const hw4 = hw4Res.ok ? await safeJson(hw4Res) : null;
   const posttest = posttestRes.ok ? await safeJson(posttestRes) : null;
 
   const pretestStatus = pretest?.canTakeTest ? "todo" : "done";
@@ -86,6 +94,18 @@ async function fetchTaskStatuses(sid) {
       : hw2?.hasEssay
       ? "progress"
       : "todo";
+  const hw3Status =
+    hw3?.state === "Completed"
+      ? "done"
+      : hw3?.hasEssay
+      ? "progress"
+      : "todo";
+  const hw4Status =
+    hw4?.state === "Completed"
+      ? "done"
+      : hw4?.hasEssay
+      ? "progress"
+      : "todo";
   const posttestStatus = posttest?.canTakeTest ? "todo" : "done";
 
   const applyLock = (status, locked) =>
@@ -93,12 +113,16 @@ async function fetchTaskStatuses(sid) {
 
   const hw1Locked = pretestStatus !== "done";
   const hw2Locked = hw1Status !== "done";
-  const postLocked = hw2Status !== "done";
+  const hw3Locked = hw2Status !== "done";
+  const hw4Locked = hw3Status !== "done";
+  const postLocked = hw4Status !== "done";
 
   return {
     pretest: pretestStatus,
     hw1: applyLock(hw1Status, hw1Locked),
     hw2: applyLock(hw2Status, hw2Locked),
+    hw3: applyLock(hw3Status, hw3Locked),
+    hw4: applyLock(hw4Status, hw4Locked),
     posttest: applyLock(posttestStatus, postLocked),
   };
 }
@@ -135,11 +159,23 @@ async function fetchUserEssays(sid) {
       if (!map["homework 2"] && source.includes("homework 2")) {
         map["homework 2"] = article;
       }
+      if (!map["homework 3"] && source.includes("homework 3")) {
+        map["homework 3"] = article;
+      }
+      if (!map["homework 4"] && source.includes("homework 4")) {
+        map["homework 4"] = article;
+      }
       if (!map["tugas 1"] && source.includes("tugas 1")) {
         map["tugas 1"] = article;
       }
       if (!map["tugas 2"] && source.includes("tugas 2")) {
         map["tugas 2"] = article;
+      }
+      if (!map["tugas 3"] && source.includes("tugas 3")) {
+        map["tugas 3"] = article;
+      }
+      if (!map["tugas 4"] && source.includes("tugas 4")) {
+        map["tugas 4"] = article;
       }
     });
     return map;
@@ -163,7 +199,7 @@ function buildTimelineItem({ title, subtitle, status, href, viewKey }) {
         <div class="timeline-subtitle">${subtitle}</div>
         <div class="timeline-actions">
           ${
-            status === "done"
+            status === "done" || status === "locked"
               ? `<span class="timeline-link is-disabled" aria-disabled="true">Buka</span>`
               : `<a class="timeline-link" href="${href}">Buka</a>`
           }
@@ -242,33 +278,57 @@ function renderHome() {
       timeline.innerHTML = [
         buildTimelineItem({
           title: "Pre-Test",
-          subtitle: "Mulai perjalananmu dengan pre-test singkat.",
+          subtitle: "tema lebaran idul fitri.",
           status: statuses.pretest,
           href: "/test1_writing",
           viewKey: viewMap.pretest ? "pretest" : null,
         }),
         buildTimelineItem({
           title: "Tugas 1",
-          subtitle: "Latihan menulis dengan bantuan prediksi.",
+          subtitle: "Waktu Luang Bersama Keluarga.",
           status: statuses.hw1,
           href: "/hw1_writing",
           viewKey: viewMap.hw1 ? "hw1" : null,
         }),
         buildTimelineItem({
           title: "Tugas 2",
-          subtitle: "Perdalam struktur dan koherensi tulisan.",
+          subtitle: "Kegiatan Belajar di Kampus.",
           status: statuses.hw2,
           href: "/hw2_writing",
           viewKey: viewMap.hw2 ? "hw2" : null,
         }),
         buildTimelineItem({
+          title: "Tugas 3",
+          subtitle: "Makanan yang Berkesan di Kampus.",
+          status: statuses.hw3,
+          href: "/hw3_writing",
+          viewKey: viewMap.hw3 ? "hw3" : null,
+        }),
+        buildTimelineItem({
+          title: "Tugas 4",
+          subtitle: "Kegiatan di Waktu Luang.",
+          status: statuses.hw4,
+          href: "/hw4_writing",
+          viewKey: viewMap.hw4 ? "hw4" : null,
+        }),
+        buildTimelineItem({
           title: "Post-Test",
-          subtitle: "Uji kembali kemampuan menulismu.",
+          subtitle: "Kegiatan di Hari Libur.",
           status: statuses.posttest,
           href: "/test2_writing",
           viewKey: viewMap.posttest ? "posttest" : null,
         }),
       ].join("");
+
+      timeline
+        .querySelectorAll(".timeline-item.status-locked a.timeline-link")
+        .forEach((link) => {
+          const span = document.createElement("span");
+          span.className = "timeline-link is-disabled";
+          span.setAttribute("aria-disabled", "true");
+          span.textContent = link.textContent;
+          link.replaceWith(span);
+        });
 
       const viewLinks = timeline.querySelectorAll(".timeline-view");
       viewLinks.forEach((link) => {
@@ -296,4 +356,3 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!checkUserAuth()) return;
   renderHome();
 });
-

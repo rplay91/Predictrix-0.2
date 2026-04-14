@@ -4,11 +4,6 @@
     return;
   }
 
-  const sid = sessionStorage.getItem("sid");
-  if (!sid) {
-    return;
-  }
-
   const getEid = () => {
     const essayDataRaw = sessionStorage.getItem("essayData");
     if (essayDataRaw) {
@@ -16,7 +11,7 @@
         const parsed = JSON.parse(essayDataRaw);
         const eid = parsed?.essay?.eid;
         if (eid !== undefined && eid !== null && eid !== "") {
-          return Number(eid);
+          return String(eid);
         }
       } catch {
         // Ignore malformed data.
@@ -24,50 +19,64 @@
     }
     const currentEid = sessionStorage.getItem("currentEid");
     if (currentEid) {
-      return Number(currentEid);
+      return String(currentEid);
     }
-    return null;
+    return "unknown";
   };
 
-  const sessionKey = `taskSessionId:${taskType}`;
-  let sessionId = sessionStorage.getItem(sessionKey);
+  const timerKey = `taskTimer:${taskType}:${getEid()}`;
+  const loadState = () => {
+    try {
+      return JSON.parse(localStorage.getItem(timerKey) || "{}");
+    } catch {
+      return {};
+    }
+  };
+
+  const saveState = (state) => {
+    localStorage.setItem(timerKey, JSON.stringify(state));
+  };
+
+  const existing = loadState();
+  let baseElapsed = Number(existing.elapsedSeconds || 0);
+  let startTime = Date.now();
+  let tickIntervalId;
   let closed = false;
 
-  const startSession = async () => {
-    try {
-      const response = await fetch("/track_task_session/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sid,
-          eid: getEid(),
-          task_type: taskType,
-          page_url: window.location.pathname,
-          user_agent: navigator.userAgent,
-        }),
-      });
-      const data = await response.json().catch(() => null);
-      if (response.ok && data?.success && data?.session_id) {
-        sessionId = String(data.session_id);
-        sessionStorage.setItem(sessionKey, sessionId);
-      }
-    } catch {
-      // Silent fail.
-    }
+  const getElapsedSeconds = () => {
+    const running = Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+    return baseElapsed + running;
   };
 
-  const endSession = () => {
+  const persist = () => {
+    saveState({ elapsedSeconds: getElapsedSeconds() });
+  };
+
+  const endSession = async () => {
     if (closed) return;
     closed = true;
-    if (!sessionId) return;
-
-    const payload = JSON.stringify({ session_id: Number(sessionId) });
-    const blob = new Blob([payload], { type: "application/json" });
-    navigator.sendBeacon("/track_task_session/end", blob);
-    sessionStorage.removeItem(sessionKey);
+    persist();
+    if (typeof window.__AUTO_SAVE__ === "function") {
+      try {
+        await window.__AUTO_SAVE__();
+      } catch {
+        // Silent fail.
+      }
+    }
+    clearInterval(tickIntervalId);
   };
 
-  startSession();
+  tickIntervalId = setInterval(persist, 5000);
+
+  window.__TASK_TIMER__ = {
+    key: timerKey,
+    getElapsedSeconds,
+    reset: () => {
+      baseElapsed = 0;
+      startTime = Date.now();
+      saveState({ elapsedSeconds: 0 });
+    },
+  };
 
   window.addEventListener("pagehide", endSession);
   document.addEventListener("visibilitychange", () => {

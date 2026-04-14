@@ -5,6 +5,33 @@ const beforeUnloadHandler = (e) => {
   return e.returnValue;
 };
 
+const MIN_PREDICTION_ATTEMPTS = 3;
+
+function getPredictionAttemptKey() {
+  const eid = sessionStorage.getItem("currentEid") || "unknown";
+  return `predictionAttempts:${eid}`;
+}
+
+function getPredictionAttemptCount() {
+  const key = getPredictionAttemptKey();
+  return Number.parseInt(sessionStorage.getItem(key) || "0", 10);
+}
+
+function isPredictionRequirementMet() {
+  const predictionBtn = document.getElementById("predictionBtn");
+  if (!predictionBtn) return true;
+  return getPredictionAttemptCount() >= MIN_PREDICTION_ATTEMPTS;
+}
+
+async function showPredictionRequirementReminder() {
+  return await Swal.fire({
+    title: "Gunakan Fitur Prediksi",
+    text: `Silakan coba fitur prediksi minimal ${MIN_PREDICTION_ATTEMPTS} kali sebelum mengumpulkan esai.`,
+    icon: "warning",
+    confirmButtonText: "OK",
+  });
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   // console.log("Page loaded, checking login status...");
 
@@ -130,37 +157,30 @@ async function showStartConfirmation() {
     allowOutsideClick: false,
     allowEscapeKey: false,
     reverseButtons: false,
-    didOpen: () => {
-      const confirmButton = Swal.getConfirmButton();
-      confirmButton.disabled = true;
-      setTimeout(() => {
-        confirmButton.disabled = false;
-      }, 5000);
-    },
   });
 }
 
 function initializePage() {
   const demoData = {
-    title: "Cara Membuat Kimchi",
+    title: "Liburan Idul Fitri Bersama Keluarga",
     images: [
       {
-        url: "/static/assets/img/pre-test_1.jpg",
-        keywords: ["napa cabbage", "cut", "prepare", "ingredients", "knife"],
+        url: "/static/assets/img/post-test_1.webp",
+        keywords: ["salat id", "pakaian tradisional", "masjid", "kebersamaan"],
         description:
-          "Gunakan pisau untuk memotong sawi putih segar dan siapkan bahan-bahan untuk membuat kimchi.",
+          "Keluarga mengenakan pakaian terbaik dan menuju masjid untuk menunaikan salat Idul Fitri bersama.",
       },
       {
-        url: "/static/assets/img/pre-test_2.webp",
-        keywords: ["mix", "seasoning", "spicy", "gloves", "bowl"],
+        url: "/static/assets/img/post-test_2.png",
+        keywords: ["mudik", "reuni keluarga", "silaturahmi", "perjalanan"],
         description:
-          "Sawi putih dicampur dengan bumbu pedas menggunakan sarung tangan di dalam mangkuk besar.",
+          "Momen mudik mempertemukan keluarga besar untuk bersilaturahmi dan merayakan Idul Fitri bersama.",
       },
       {
-        url: "/static/assets/img/pre-test_3.webp",
-        keywords: ["jar", "ferment", "container", "preserve"],
+        url: "/static/assets/img/post-test_3.jpg",
+        keywords: ["THR", "amplop", "anak-anak", "berbagi"],
         description:
-          "Kimchi yang sudah dibumbui dimasukkan ke dalam toples untuk fermentasi.",
+          "Orang tua membagikan amplop THR kepada anak-anak sebagai bentuk berbagi dan doa di hari raya.",
       },
     ],
   };
@@ -216,7 +236,7 @@ function createInterface() {
                 <span>Petunjuk</span>
               </div>
               <div class="instruction-content">
-                <p>Kimchi adalah makanan terkenal dari Korea yang dibuat dari sayuran fermentasi. Gambar-gambar berikut menunjukkan langkah-langkah pembuatannya. Tulislah esai untuk memperkenalkan kepada pembaca bagaimana kimchi dibuat.</p>
+                <p>Idul Fitri adalah momen penting di Indonesia untuk berkumpul bersama keluarga. Gambar-gambar berikut menunjukkan kegiatan khas saat Idul Fitri. Tulislah esai untuk menceritakan liburan Idul Fitri bersama keluarga kepada pembaca.</p>
                 <p>Ikuti panduan berikut saat menulis:</p>
                 <li>Tulislah esai berdasarkan Judul dan informasi Konteks yang disediakan.</li>
                 <li>Tulislah setidaknya 150 kata.</li>
@@ -383,7 +403,7 @@ function setupWordCounter() {
   }
   if (!counter.innerHTML) {
     counter.innerHTML = `
-      <span id="wordCounterEmoji" style="font-size:18px;">??</span>\n      <span id="wordCounterText">0 kata</span>
+      <span id="wordCounterEmoji" style="font-size:18px;"> </span>\n      <span id="wordCounterText">0 kata</span>
     `;
   }
 
@@ -398,15 +418,15 @@ function setupWordCounter() {
 
   const getState = (count) => {
     if (count < 200) {
-      return { emoji: "??" };
+      return { emoji: "" };
     }
     if (count < 300) {
-      return { emoji: "??" };
+      return { emoji: "" };
     }
     if (count < 500) {
-      return { emoji: "??" };
+      return { emoji: "" };
     }
-    return { emoji: "??" };
+    return { emoji: "" };
   };
 
   const updateCounter = () => {
@@ -559,6 +579,10 @@ async function updateEssayContent() {
 }
 
 function handleSubmit() {
+  if (!isPredictionRequirementMet()) {
+    showPredictionRequirementReminder();
+    return;
+  }
   Swal.fire({
     title: "Konfirmasi Pengumpulan",
     text: "Apakah Anda ingin mengumpulkan esai? Anda tidak dapat mengeditnya setelah dikumpulkan.",

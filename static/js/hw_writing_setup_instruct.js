@@ -8,6 +8,12 @@ const CONFIG = {
   ANALYSIS_TIMER: 1000,
 };
 
+const IMAGE_COMPRESS = {
+  MAX_WIDTH: 1024,
+  MAX_HEIGHT: 1024,
+  QUALITY: 0.5,
+};
+
 // Galat messages
 const ERROR_MESSAGES = {
   fileType: {
@@ -353,7 +359,70 @@ function isValidImageFile(file) {
     });
     return false;
   }
+  const maxSizeBytes = 10 * 1024 * 1024;
+  if (file.size > maxSizeBytes) {
+    Swal.fire({
+      icon: "error",
+      title: "Ukuran File Terlalu Besar",
+      text: "Maksimal ukuran gambar adalah 10 MB.",
+    });
+    return false;
+  }
   return true;
+}
+
+async function compressImageToJpeg(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const img = new Image();
+
+    reader.onload = () => {
+      img.onload = () => {
+        const ratio = Math.min(
+          1,
+          IMAGE_COMPRESS.MAX_WIDTH / img.width,
+          IMAGE_COMPRESS.MAX_HEIGHT / img.height
+        );
+        const width = Math.max(1, Math.round(img.width * ratio));
+        const height = Math.max(1, Math.round(img.height * ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve({ file, dataUrl: reader.result });
+              return;
+            }
+            const compressedFile = new File(
+              [blob],
+              file.name.replace(/\.[^/.]+$/, ".jpg"),
+              { type: "image/jpeg" }
+            );
+            const previewReader = new FileReader();
+            previewReader.onload = () => {
+              resolve({ file: compressedFile, dataUrl: previewReader.result });
+            };
+            previewReader.onerror = reject;
+            previewReader.readAsDataURL(blob);
+          },
+          "image/jpeg",
+          IMAGE_COMPRESS.QUALITY
+        );
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // Add image upload block
@@ -517,10 +586,10 @@ function addKeywordFromInput(index) {
 }
 
 // Handle image upload and preview
-function handleImageUpload(file, index) {
+async function handleImageUpload(file, index) {
   const defaultImageUrl = "/static/assets/img/demo.jpg";
-
   const previewImg = document.getElementById(`imagePreview_${index}`);
+  const imageInput = document.getElementById(`imageUpload_${index}`);
 
   previewImg.onload = function () {
     const containerWidth = CONFIG.IMAGE_CONTAINER_SIZE;
@@ -547,6 +616,23 @@ function handleImageUpload(file, index) {
       text: "Gagal memuat gambar. Silakan coba lagi.",
     });
   };
+
+  if (file) {
+    try {
+      const compressed = await compressImageToJpeg(file);
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(compressed.file);
+      imageInput.files = dataTransfer.files;
+      previewImg.src = compressed.dataUrl;
+      return;
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "Gagal Memproses Gambar",
+        text: "Silakan coba unggah ulang gambar Anda.",
+      });
+    }
+  }
 
   previewImg.src = defaultImageUrl;
 }

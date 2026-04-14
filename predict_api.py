@@ -1,20 +1,17 @@
 ﻿from openai import OpenAI
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any, Literal
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
 import asyncio
 import time
 import re
 from collections import Counter, OrderedDict
 import json
 from datetime import datetime, timezone
-import numpy as np
 import os
 import hashlib
 import threading
-from functools import partial
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
 from graphRAG.global_search import search_graph
 
 from api_config import GPT_API_KEY
@@ -207,121 +204,13 @@ MAX_FEEDBACK_RETRY = 3
 FEEDBACK_LOG_PATH = "feedback_iterations.jsonl"
 _FEEDBACK_STATE: Dict[str, Dict[str, Any]] = {}
 
-RUBRIC_WEIGHTS: Dict[str, float] = {
-    "topic_relevance": 0.22,
-    "fluency": 0.20,
-    "redundancy_check": 0.18,
-    "logical_accuracy": 0.20,
-    "contextual_consistency": 0.20,
-}
-
-RUBRIC_CATEGORIES = list(RUBRIC_WEIGHTS.keys())
-
-JUDGE_PROMPT_TEMPLATE = """Judul Esai:
-{title}
-
-Informasi Kontekstual:
-{contextual_information}
-
-Teks sekitar sebelum [PREDICTED SENTENCE] (2-4 kalimat terakhir):
-{prev_sentences}
-
-Kalimat setelah [PREDICTED SENTENCE]:
-{next_sentence}
-
-Kalimat prediksi kandidat:
-{candidate}
-
-Rubrik:
-
-Relevansi Topik
-- Kesesuaian Topik: mendukung topik inti esai dari judul/konteks.
-- Kejelasan Peran: perannya jelas (memperkenalkan ide, bukti, transisi, ringkasan).
-- Relevansi: menghindari ide yang menyimpang.
-Skor 0-10.
-
-Kelancaran
-- Keterhubungan Mulus: terhubung dengan kalimat di sekitarnya.
-- Kualitas Transisi: frasa transisi membantu alur.
-- Koherensi: menjaga perkembangan logis.
-Skor 0-10.
-
-Pemeriksaan Redundansi
-- Keunikan: menghindari pengulangan/parafrasa ide yang sudah ada.
-- Orisinalitas Semantik: menghindari duplikasi makna.
-- Nilai Tambah: memberi konten baru yang bermakna.
-Skor 0-10.
-
-Akurasi Logis
-- Akurasi Fakta: tidak ada klaim salah/tidak didukung.
-- Konsistensi: tidak bertentangan dengan fakta dalam esai.
-- Presisi Detail: detail penting tetap akurat.
-Skor 0-10.
-
-Konsistensi Kontekstual
-- Kesesuaian Latar: sesuai dengan latar dan nada yang sudah ditetapkan.
-- Penggunaan Informasi Kontekstual: menggunakan konteks secara tepat.
-- Konsistensi Lingkungan: menghormati konteks yang sudah terbentuk.
-Skor 0-10.
-
-Kembalikan JSON saja berisi:
-- scores (5 kategori)
-- issues (kelemahan spesifik)
-- prompt_revision_goal (satu tujuan ringkas)
-"""
-
-SELF_IMPROVER_PROMPT_TEMPLATE = """prompt_snapshot saat ini:
-<<<
-{prompt_snapshot}
->>>
-
-Kalimat prediksi dari prompt_snapshot saat ini:
-{predicted_sentence}
-
-JSON penilaian:
-{judge_json}
-
-Tugas:
-- Revisi HANYA prompt snapshot yang dipakai untuk generasi kalimat berikutnya.
-- JANGAN menulis ulang kalimat prediksi secara langsung.
-- Pertahankan fakta esai, jangan tambah klaim/statistik faktual baru.
-- Terapkan edit terarah berdasarkan issues dari penilai dan prompt_revision_goal.
-- Kembalikan JSON ketat saja dengan:
-  - revised_prompt_snapshot (teks)
-  - diff_summary (daftar ringkas perubahan)
-"""
-
-
-class RubricScores(BaseModel):
-    topic_relevance: float = Field(ge=0, le=10)
-    fluency: float = Field(ge=0, le=10)
-    redundancy_check: float = Field(ge=0, le=10)
-    logical_accuracy: float = Field(ge=0, le=10)
-    contextual_consistency: float = Field(ge=0, le=10)
-
-
-class JudgeIssue(BaseModel):
-    category: Literal[
-        "topic_relevance",
-        "fluency",
-        "redundancy_check",
-        "logical_accuracy",
-        "contextual_consistency",
-    ]
-    severity: Literal["high", "medium", "low"]
-    reason: str
-    fix_hint: str
-
-
-class JudgeOutput(BaseModel):
-    scores: RubricScores
-    issues: List[JudgeIssue] = Field(default_factory=list)
-    prompt_revision_goal: str
-
-
-class SelfImproverOutput(BaseModel):
-    revised_prompt_snapshot: str
-    diff_summary: List[str] = Field(default_factory=list)
+RUBRIC_CATEGORIES = [
+    "topic_relevance",
+    "fluency",
+    "redundancy_check",
+    "logical_accuracy",
+    "contextual_consistency",
+]
 
 
 ## add the reasoning Prompt for the component
@@ -845,36 +734,6 @@ Jangan membuat banyak opsi. Kembalikan satu jawaban final saja untuk pola kalima
 
     return parsed.sentence_pattern, writing_patterns_formatted_output, writing_features_formatted_output
 
-def _split_history_content_batches(history_content: str, max_chars: int) -> List[str]:
-    text = str(history_content or "").strip()
-    if not text:
-        return []
-
-    sections = [chunk.strip() for chunk in re.split(r"\n\s*\n+", text) if chunk and chunk.strip()]
-    if not sections:
-        return [text]
-
-    batches: List[str] = []
-    current_batch: List[str] = []
-    current_len = 0
-
-    for section in sections:
-        section_len = len(section)
-        extra_len = 2 if current_batch else 0
-        if current_batch and current_len + extra_len + section_len > max_chars:
-            batches.append("\n\n".join(current_batch))
-            current_batch = [section]
-            current_len = section_len
-        else:
-            current_batch.append(section)
-            current_len += extra_len + section_len
-
-    if current_batch:
-        batches.append("\n\n".join(current_batch))
-
-    return batches
-
-
 def _identify_writing_pattern_single(history_content: str) -> tuple[str, str]:
     # Build prompt for writing pattern analysis
     user_prompt = f"""# Instruksi:
@@ -1154,11 +1013,6 @@ def normalize_pattern_string(value: str) -> str:  # normalize "type:" from llm
 
 
 # Execute prediction
-async def _run_blocking(func, /, *args, **kwargs):
-    """Run blocking code in a worker thread to keep FastAPI event loop responsive."""
-    return await asyncio.to_thread(partial(func, *args, **kwargs))
-
-
 async def get_predict_sentence(
     sid: str,
     eid: int,
@@ -1510,196 +1364,6 @@ def _extract_surrounding_text(current_window: str) -> Dict[str, str]:
     }
 
 
-def _compute_weighted_total(scores: Dict[str, float]) -> float:
-    total = 0.0
-    for category, weight in RUBRIC_WEIGHTS.items():
-        total += float(scores.get(category, 0.0)) * weight
-    return round(total, 4)
-
-
-def _derive_verdict(scores: Dict[str, float], weighted_total: float) -> str:
-    any_below_7 = any(float(scores.get(category, 0.0)) < 7.0 for category in RUBRIC_CATEGORIES)
-    if weighted_total < 7.0 or float(scores.get("logical_accuracy", 0.0)) < 6.0:
-        return "reject"
-    if weighted_total >= 8.2 and not any_below_7:
-        return "accept"
-    return "revise"
-
-
-def _normalize_judge_payload(payload: JudgeOutput) -> Dict[str, Any]:
-    scores = payload.scores.model_dump()
-    weighted_total = _compute_weighted_total(scores)
-    verdict = _derive_verdict(scores, weighted_total)
-
-    normalized_issues = []
-    for issue in payload.issues:
-        normalized_issues.append(
-            {
-                "category": issue.category,
-                "severity": issue.severity,
-                "reason": issue.reason.strip(),
-                "fix_hint": issue.fix_hint.strip(),
-            }
-        )
-
-    prompt_revision_goal = payload.prompt_revision_goal.strip() or "Perbaiki kelemahan rubrik sambil mempertahankan topik dan konsistensi gaya."
-    return {
-        "scores": scores,
-        "weighted_total": weighted_total,
-        "verdict": verdict,
-        "issues": normalized_issues,
-        "prompt_revision_goal": prompt_revision_goal,
-    }
-
-
-def _call_structured_with_retry(
-    *,
-    system_prompt: str,
-    user_prompt: str,
-    response_model: Any,
-    model: str = "gpt-5-nano",
-):
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-
-    last_error: Optional[Exception] = None
-    for attempt in range(2):
-        try:
-            response = _cached_chat_parse(
-                model=model,
-                reasoning_effort="low",
-                messages=messages,
-                response_format=response_model,
-            )
-            parsed = response.choices[0].message.parsed
-            if parsed is None:
-                raise ValueError("Structured response is empty.")
-            return parsed
-        except Exception as exc:
-            last_error = exc
-            if attempt == 0:
-                messages.append({"role": "user", "content": "Kembalikan hanya JSON yang valid."})
-                continue
-    raise RuntimeError(f"Structured model call failed: {last_error}")
-
-
-def judge_prediction(context: Dict[str, Any], predicted_sentence: str) -> Dict[str, Any]:
-    """Evaluate a candidate predicted sentence using structured rubric output."""
-    title = str(context.get("title", "")).strip()
-    contextual_information = str(context.get("contextual_information", "")).strip()
-    current_window = str(context.get("current_window", "")).strip()
-    extracted = _extract_surrounding_text(current_window)
-
-    user_prompt = JUDGE_PROMPT_TEMPLATE.format(
-        title=title or "Tanpa Judul",
-        contextual_information=contextual_information or "Tidak ada informasi kontekstual yang diberikan.",
-        prev_sentences=extracted["prev_sentences"],
-        next_sentence=extracted["next_sentence"],
-        candidate=predicted_sentence.strip(),
-    )
-
-    system_prompt = (
-        "Anda adalah evaluator rubrik yang ketat untuk prediksi kalimat berikutnya pada esai EFL. "
-        "Kembalikan hanya JSON yang persis mengikuti skema."
-    )
-
-    raw = _call_structured_with_retry(
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        response_model=JudgeOutput,
-    )
-    normalized = _normalize_judge_payload(raw)
-    return normalized
-
-
-def revise_prompt_snapshot(prompt_snapshot: str, judge_json: Dict[str, Any]) -> Dict[str, Any]:
-    """Revise only the prompt snapshot based on rubric feedback."""
-    judge_payload = dict(judge_json)
-    predicted_sentence = str(judge_payload.pop("_predicted_sentence", "")).strip()
-    judge_text = json.dumps(judge_payload, ensure_ascii=True, indent=2)
-
-    user_prompt = SELF_IMPROVER_PROMPT_TEMPLATE.format(
-        prompt_snapshot=prompt_snapshot,
-        predicted_sentence=predicted_sentence,
-        judge_json=judge_text,
-    )
-    system_prompt = (
-        "Anda merevisi prompt snapshot yang digunakan oleh generator kalimat berikutnya. "
-        "Anda TIDAK menulis ulang kalimatnya. Kembalikan hanya JSON."
-    )
-
-    def _forced_delta_snapshot(base_prompt: str, judge_data: Dict[str, Any], revision_label: str) -> Dict[str, Any]:
-        goal = str(judge_data.get("prompt_revision_goal", "")).strip()
-        issues = judge_data.get("issues", [])
-        hints: List[str] = []
-        if isinstance(issues, list):
-            for issue in issues[:3]:
-                if isinstance(issue, dict):
-                    hint = str(issue.get("fix_hint", "")).strip()
-                    if hint:
-                        hints.append(hint)
-        extra_lines = [f"- Label revisi: {revision_label}"]
-        if goal:
-            extra_lines.append(f"- Tujuan prioritas: {goal}")
-        for idx, hint in enumerate(hints, start=1):
-            extra_lines.append(f"- Petunjuk perbaikan {idx}: {hint}")
-
-        forced_block = (
-            "\n\n# Fokus Revisi\n"
-            "Terapkan batasan terarah berikut pada generasi berikutnya:\n"
-            + "\n".join(extra_lines)
-            + "\n"
-        )
-        revised = base_prompt.rstrip() + forced_block
-        return {
-            "revised_prompt_snapshot": revised,
-            "diff_summary": [
-                "Menambahkan blok fokus revisi eksplisit untuk memaksa perubahan prompt yang terarah.",
-                f"Menyematkan label revisi: {revision_label}.",
-            ],
-        }
-
-    try:
-        raw = _call_structured_with_retry(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_model=SelfImproverOutput,
-        )
-        revised_prompt_snapshot = raw.revised_prompt_snapshot.strip()
-        diff_summary = raw.diff_summary
-        if not revised_prompt_snapshot:
-            raise ValueError("Missing revised_prompt_snapshot.")
-        if revised_prompt_snapshot == prompt_snapshot.strip():
-            fallback = _forced_delta_snapshot(prompt_snapshot, judge_payload, "auto-forced-change")
-            fallback["diff_summary"].insert(0, "Model mengembalikan prompt tanpa perubahan; diterapkan delta terarah minimal secara paksa.")
-            return fallback
-        clean_diff_summary = [str(item).strip() for item in diff_summary if str(item).strip()]
-        if not clean_diff_summary:
-            clean_diff_summary = ["Prompt snapshot direvisi dengan batasan terarah berdasarkan umpan balik rubrik."]
-        return {
-            "revised_prompt_snapshot": revised_prompt_snapshot,
-            "diff_summary": clean_diff_summary,
-        }
-    except Exception as exc:
-        print(f"[WARNING] SelfImprover failed, creating forced revision block: {exc}")
-        fallback = _forced_delta_snapshot(prompt_snapshot, judge_payload, "fallback-after-error")
-        fallback["diff_summary"].insert(0, "Fallback due to JSON/parse failure.")
-        return fallback
-
-
-def _prediction_rank_key(candidate: Dict[str, Any]) -> tuple:
-    judge = candidate["judge"]
-    scores = judge["scores"]
-    return (
-        float(judge.get("weighted_total", 0.0)),
-        float(scores.get("topic_relevance", 0.0)),
-        float(scores.get("contextual_consistency", 0.0)),
-        float(scores.get("logical_accuracy", 0.0)),
-    )
-
-
 def run_prompt_self_improve(
     context: Dict[str, Any],
     prompt_snapshot_v0: str,
@@ -1794,33 +1458,7 @@ class SimilarityEvaluatorBgeM3:
     """Evaluate similarity using BGE-M3 embeddings with a TF-IDF fallback."""
 
     def __init__(self, model_name_or_path: str = "BAAI/bge-m3", cache_size: int = 256) -> None:
-        self._cache: Dict[str, np.ndarray] = {}
-        self._cache_size = max(cache_size, 1)
-        model_path = os.environ.get("BGE_M3_MODEL_PATH", model_name_or_path)
-        try:
-            self._model = SentenceTransformer(model_path, local_files_only=True)
-            self._use_fallback = False
-            self.embedding_model = "bge-m3"
-        except Exception as exc:
-            print(f"[WARNING] BGE-M3 load failed, using TF-IDF fallback: {exc}")
-            self._model = None
-            self._use_fallback = True
-            self.embedding_model = "tf-idf-fallback"
-
-    def _cache_embedding(self, text: str, embedding: np.ndarray) -> None:
-        if text in self._cache:
-            return
-        if len(self._cache) >= self._cache_size:
-            self._cache.pop(next(iter(self._cache)))
-        self._cache[text] = embedding
-
-    def _get_embedding(self, text: str) -> np.ndarray:
-        cached = self._cache.get(text)
-        if cached is not None:
-            return cached
-        embedding = self._model.encode([text], convert_to_numpy=True, normalize_embeddings=True)[0]
-        self._cache_embedding(text, embedding)
-        return embedding
+        self.embedding_model = "tf-idf-fallback"
 
     def _tfidf_score(self, a: str, b: str) -> float:
         vectorizer = TfidfVectorizer()
@@ -1831,20 +1469,7 @@ class SimilarityEvaluatorBgeM3:
     def score(self, a: str, b: str) -> float:
         if not a or not b:
             return 0.0
-        if self._use_fallback:
-            return self._tfidf_score(a, b)
-
-        try:
-            emb_a = self._get_embedding(a)
-            emb_b = self._get_embedding(b)
-            denom = (np.linalg.norm(emb_a) * np.linalg.norm(emb_b))
-            if denom == 0:
-                return 0.0
-            score = float(np.dot(emb_a, emb_b) / denom)
-            return max(0.0, min(1.0, score))
-        except Exception as exc:
-            print(f"[WARNING] BGE-M3 scoring failed, using TF-IDF fallback: {exc}")
-            return self._tfidf_score(a, b)
+        return self._tfidf_score(a, b)
 
 
 class PcpReviserGpt52:
