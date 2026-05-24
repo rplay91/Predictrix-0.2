@@ -1404,20 +1404,28 @@ async function handleSubmit() {
     if (feedback) {
       const sid = sessionStorage.getItem("sid") || "";
       const task_type = window.__TASK_TYPE__ || "hw1";
-      fetch("/submit_hw_feedback", {
+      const duration_sec = window.__TASK_TIMER__?.getElapsedSeconds
+        ? window.__TASK_TIMER__.getElapsedSeconds()
+        : 0;
+      const feedbackResponse = await fetch("/submit_hw_feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eid: Number(essayData.essay.eid),
           sid,
           task_type,
+          duration_sec,
           ...feedback,
         }),
-      }).catch(() => {});
+      });
+      if (!feedbackResponse.ok) {
+        throw new Error("Gagal mengirim feedback esai");
+      }
+      const feedbackResult = await feedbackResponse.json();
+      if (!feedbackResult.success) {
+        throw new Error(feedbackResult.error || "Gagal menyimpan feedback esai");
+      }
       // 5. Send submit requent
-      const duration_sec = window.__TASK_TIMER__?.getElapsedSeconds
-        ? window.__TASK_TIMER__.getElapsedSeconds()
-        : 0;
       const response = await fetch(`/submit_hw/${essayData.essay.eid}`, {
         method: "POST",
         headers: {

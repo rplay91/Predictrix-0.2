@@ -2,6 +2,9 @@ import pymysql
 
 from db_config import DB_CONFIG
 
+PRETEST_TOPIC = "Liburan Idul Fitri Bersama Keluarga"
+POSTTEST_TOPIC = "Kegiatan di Hari libur"
+
 
 def check_pretest_status(sid: str) -> bool:
     """Return True when the student still has to complete the pre-test essay."""
@@ -40,9 +43,9 @@ def initialize_pretest_essay(sid: str) -> dict:
             # Insert an empty essay record. Content will be filled later.
             sql1 = """
                 INSERT INTO essay_info (topic, content, start_time)
-                VALUES ('How To Make Kimchi', '', NOW())
+                VALUES (%s, '', NOW())
             """
-            cursor.execute(sql1)
+            cursor.execute(sql1, (PRETEST_TOPIC,))
 
             # Capture the generated essay id.
             eid = cursor.lastrowid
@@ -74,19 +77,30 @@ def initialize_pretest_essay(sid: str) -> dict:
             connection.close()
 
 
-def update_pretest_essay_content(eid: str, content: str) -> dict:
+def update_pretest_essay_content(
+    eid: str, content: str, duration_sec: int | None = None
+) -> dict:
     """Save the student's pre-test essay content and mark the essay completed."""
     connection = None
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
             # Update the essay content.
-            sql1 = """
-                UPDATE essay_info 
-                SET content = %s
-                WHERE eid = %s
-            """
-            cursor.execute(sql1, (content, eid))
+            if duration_sec is None:
+                sql1 = """
+                    UPDATE essay_info 
+                    SET content = %s
+                    WHERE eid = %s
+                """
+                cursor.execute(sql1, (content, eid))
+            else:
+                sql1 = """
+                    UPDATE essay_info 
+                    SET content = %s,
+                        duration_sec = %s
+                    WHERE eid = %s
+                """
+                cursor.execute(sql1, (content, duration_sec, eid))
 
             # Update the essay status.
             sql2 = """
@@ -150,9 +164,9 @@ def initialize_posttest_essay(sid: str) -> dict:
         with connection.cursor() as cursor:
             sql1 = """
                 INSERT INTO essay_info (topic, content, start_time)
-                VALUES ('Introducing Lebaran in Indonesia', '', NOW())
+                VALUES (%s, '', NOW())
             """
-            cursor.execute(sql1)
+            cursor.execute(sql1, (POSTTEST_TOPIC,))
 
             eid = cursor.lastrowid
 

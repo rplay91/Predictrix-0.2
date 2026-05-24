@@ -620,41 +620,64 @@ def save_homework_feedback(feedback: dict) -> dict:
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor() as cursor:
-            sql = """
+            create_table_sql = """
+                CREATE TABLE IF NOT EXISTS essay_feedback (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    eid INT NOT NULL,
+                    sid VARCHAR(255) NOT NULL,
+                    task_type VARCHAR(50) NOT NULL,
+                    q1_rating INT NOT NULL,
+                    q1_comment TEXT NULL,
+                    q2_rating INT NOT NULL,
+                    q2_comment TEXT NULL,
+                    predictions_json LONGTEXT NULL,
+                    suggestion TEXT NULL,
+                    duration_sec INT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            cursor.execute(create_table_sql)
+
+            cursor.execute("SHOW COLUMNS FROM essay_feedback")
+            existing_columns = {row["Field"] for row in cursor.fetchall()}
+
+            feedback_values = {
+                "eid": feedback.get("eid"),
+                "sid": feedback.get("sid"),
+                "task_type": feedback.get("task_type"),
+                "q1_rating": feedback.get("q1_rating"),
+                "q1_comment": feedback.get("q1_comment"),
+                "q2_rating": feedback.get("q2_rating"),
+                "q2_comment": feedback.get("q2_comment"),
+                "predictions_json": json.dumps(feedback.get("predictions") or []),
+                "suggestion": feedback.get("suggestion"),
+                "duration_sec": feedback.get("duration_sec"),
+            }
+
+            insert_columns = [
+                column for column in feedback_values.keys() if column in existing_columns
+            ]
+            insert_values = [feedback_values[column] for column in insert_columns]
+
+            placeholders = ", ".join(["%s"] * len(insert_columns))
+            columns_sql = ",\n                    ".join(insert_columns)
+            sql = f"""
                 INSERT INTO essay_feedback (
-                    eid,
-                    sid,
-                    task_type,
-                    q1_rating,
-                    q1_comment,
-                    q2_rating,
-                    q2_comment,
-                    predictions_json,
-                    suggestion,
+                    {columns_sql},
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES ({placeholders}, NOW())
             """
-            cursor.execute(
-                sql,
-                (
-                    feedback.get("eid"),
-                    feedback.get("sid"),
-                    feedback.get("task_type"),
-                    feedback.get("q1_rating"),
-                    feedback.get("q1_comment"),
-                    feedback.get("q2_rating"),
-                    feedback.get("q2_comment"),
-                    json.dumps(feedback.get("predictions") or []),
-                    feedback.get("suggestion"),
-                ),
-            )
+            cursor.execute(sql, insert_values)
             connection.commit()
         return {"success": True}
     except Exception as e:
         if connection:
             connection.rollback()
-        return {"success": False, "error": str(e)}
+        return {
+            "success": False,
+            "error": f"Gagal menyimpan feedback esai: {str(e)}",
+        }
     finally:
         if connection:
             connection.close()

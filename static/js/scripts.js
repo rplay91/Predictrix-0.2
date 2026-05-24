@@ -16,6 +16,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
             <i class="fas fa-bars"></i>
           </button>
           <a class="navbar-brand ps-1" href="/">Predictrix</a>
+          
         </div>
         <div class="ms-auto me-3 d-flex align-items-center">
           <button class="btn btn-outline-light btn-sm" id="logoutBtn" type="button">

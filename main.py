@@ -5,8 +5,6 @@ import base64
 from typing import List
 
 from fastapi import FastAPI, File, Request, UploadFile
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.routing import Match
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,11 +17,11 @@ from auth import create_access_token, verify_access_token
 from login_api import verify_login, verify_teacher_login, register_student
 from index_api import get_user_essays
 from test_api import check_pretest_status, initialize_pretest_essay, update_pretest_essay_content, check_posttest_status, initialize_posttest_essay
-from hw_writing_api import check_hw1_status, check_hw2_status, check_hw3_status, check_hw4_status, load_hw_data, save_hw_content, reset_hw, submit_hw, get_history_essays_content, save_prediction_result, update_prediction_check_count, save_homework_feedback
-from hw_setup_api import analyze_image, initialize_homework1_essay, initialize_homework2_essay, initialize_homework3_essay, initialize_homework4_essay, save_hw_images
+from hw_writing_api import check_hw1_status, check_hw2_status, load_hw_data, save_hw_content, reset_hw, submit_hw, get_history_essays_content, save_prediction_result, update_prediction_check_count
+from hw_setup_api import analyze_image, initialize_homework1_essay, initialize_homework2_essay, save_hw_images
 from predict_api import get_predict_sentence, run_feedback_loop
-from show_essay_api import update_review_count, get_essay_detail, get_essay_info
-from teacher_index_api import get_all_essay_list, get_images_by_eid, get_predictions_by_eid
+from show_essay_api import update_review_count
+from teacher_index_api import get_all_essay_list
 from behavior_log_api import create_task_session, close_task_session
 
 
@@ -71,10 +69,6 @@ AUTH_EXEMPT_PATHS = {
     "/hw1_writing",
     "/hw2_writing_setup",
     "/hw2_writing",
-    "/hw3_writing_setup",
-    "/hw3_writing",
-    "/hw4_writing_setup",
-    "/hw4_writing",
     "/test1_writing",
     "/test2_writing",
     "/hw_writing_setup_instruct",
@@ -100,17 +94,8 @@ async def auth_middleware(request: Request, call_next):
     ):
         return await call_next(request)
 
-    has_route = False
-    for route in app.router.routes:
-        match, _ = route.matches(request.scope)
-        if match == Match.FULL:
-            has_route = True
-            break
-
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
-        if not has_route:
-            return await call_next(request)
         return JSONResponse(content={"success": False, "error": "Missing token."}, status_code=401)
 
     token = auth_header.split(" ", 1)[1].strip()
@@ -118,15 +103,6 @@ async def auth_middleware(request: Request, call_next):
         payload = verify_access_token(token)
     except Exception:
         return JSONResponse(content={"success": False, "error": "Invalid token."}, status_code=401)
-
-    # Restrict teacher-only endpoints
-    if (
-        (path.startswith("/api/get_all_essay_list") 
-         or path.startswith("/api/essay_images")
-         or path.startswith("/api/essay_predictions"))
-        and payload.get("role") != "teacher"
-    ):
-        return JSONResponse(content={"success": False, "error": "Forbidden."}, status_code=403)
 
     request.state.user = payload
     return await call_next(request)
@@ -148,17 +124,6 @@ async def register_page(request: Request):
 async def error(request: Request):
     return render_template(request, "404.html")
 
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    if exc.status_code == 404:
-        response = render_template(request, "404.html")
-        response.status_code = 404
-        return response
-    return JSONResponse(
-        content={"success": False, "error": exc.detail},
-        status_code=exc.status_code,
-    )
-
 @app.get("/show_essay", response_class=HTMLResponse)
 async def show_essay(request: Request):
     return render_template(request, "show_essay.html")
@@ -178,22 +143,6 @@ async def hw2_writing_setup(request: Request):
 @app.get("/hw2_writing", response_class=HTMLResponse)
 async def hw2_writing(request: Request):
     return render_template(request, "hw2_writing.html")
-
-@app.get("/hw3_writing_setup", response_class=HTMLResponse)
-async def hw3_writing_setup(request: Request):
-    return render_template(request, "hw3_writing_setup.html")
-
-@app.get("/hw3_writing", response_class=HTMLResponse)
-async def hw3_writing(request: Request):
-    return render_template(request, "hw3_writing.html")
-
-@app.get("/hw4_writing_setup", response_class=HTMLResponse)
-async def hw4_writing_setup(request: Request):
-    return render_template(request, "hw4_writing_setup.html")
-
-@app.get("/hw4_writing", response_class=HTMLResponse)
-async def hw4_writing(request: Request):
-    return render_template(request, "hw4_writing.html")
 
 @app.get("/test1_writing", response_class=HTMLResponse)
 async def test1_writing(request: Request):
@@ -327,19 +276,6 @@ async def api_initialize_posttest(sid: str):
 # Shared request model for essay content
 class EssayContent(BaseModel):
     content: str
-    duration_sec: int | None = None
-
-class HomeworkFeedback(BaseModel):
-    eid: int
-    sid: str
-    task_type: str
-    q1_rating: int
-    q1_comment: str | None = None
-    q2_rating: int
-    q2_comment: str | None = None
-    predictions: List[dict] | None = None
-    suggestion: str | None = None
-    duration_sec: int | None = None
 
 @app.post("/update_pretest_essay/{eid}")
 async def api_update_pretest_essay(eid: str, essay_content: EssayContent):
@@ -356,18 +292,6 @@ async def api_check_hw1_status(sid: str):
 @app.get("/check_hw2_status/{sid}")
 async def api_check_hw2_status(sid: str):
     result = check_hw2_status(sid)
-    return JSONResponse(content=result)
-
-# Check homework 3 availability
-@app.get("/check_hw3_status/{sid}")
-async def api_check_hw3_status(sid: str):
-    result = check_hw3_status(sid)
-    return JSONResponse(content=result)
-
-# Check homework 4 availability
-@app.get("/check_hw4_status/{sid}")
-async def api_check_hw4_status(sid: str):
-    result = check_hw4_status(sid)
     return JSONResponse(content=result)
 
 # Analyze uploaded homework image
@@ -449,44 +373,6 @@ async def api_initialize_homework2(setup_data: HomeworkSetup):
         'eid': essay_result['eid']
     })
 
-# Initialize homework 3 essay data
-@app.post("/initialize_homework3")
-async def api_initialize_homework3(setup_data: HomeworkSetup):
-    essay_result = initialize_homework3_essay(setup_data.sid, setup_data.title)
-    if not essay_result['success']:
-        return JSONResponse(content=essay_result)
-
-    images_result = save_hw_images(
-        essay_result['eid'],
-        [img.dict() for img in setup_data.images]
-    )
-    if not images_result['success']:
-        return JSONResponse(content=images_result)
-
-    return JSONResponse(content={
-        'success': True,
-        'eid': essay_result['eid']
-    })
-
-# Initialize homework 4 essay data
-@app.post("/initialize_homework4")
-async def api_initialize_homework4(setup_data: HomeworkSetup):
-    essay_result = initialize_homework4_essay(setup_data.sid, setup_data.title)
-    if not essay_result['success']:
-        return JSONResponse(content=essay_result)
-
-    images_result = save_hw_images(
-        essay_result['eid'],
-        [img.dict() for img in setup_data.images]
-    )
-    if not images_result['success']:
-        return JSONResponse(content=images_result)
-
-    return JSONResponse(content={
-        'success': True,
-        'eid': essay_result['eid']
-    })
-
 # Load existing homework data
 @app.get("/load_hw_data/{eid}")
 async def api_load_hw_data(eid: str):
@@ -496,11 +382,10 @@ async def api_load_hw_data(eid: str):
 # Request body for saving homework content
 class EssayContent(BaseModel):
     content: str
-    duration_sec: int | None = None
 
 @app.post("/save_hw_content/{eid}")
 async def api_save_hw_content(eid: str, essay_content: EssayContent):
-    result = save_hw_content(eid, essay_content.content, essay_content.duration_sec)
+    result = save_hw_content(eid, essay_content.content)
     return JSONResponse(content=result)
 
 # Reset homework progress
@@ -512,12 +397,7 @@ async def api_reset_hw(eid: str):
 # Submit homework content
 @app.post("/submit_hw/{eid}")
 async def api_submit_hw(eid: str, essay_content: EssayContent):
-    result = submit_hw(eid, essay_content.content, essay_content.duration_sec)
-    return JSONResponse(content=result)
-
-@app.post("/submit_hw_feedback")
-async def api_submit_hw_feedback(payload: HomeworkFeedback):
-    result = save_homework_feedback(payload.dict())
+    result = submit_hw(eid, essay_content.content)
     return JSONResponse(content=result)
 
 # Retrieve historical essays for a student
@@ -647,38 +527,20 @@ async def api_update_review_count(eid: str):
     result = update_review_count(eid)
     return JSONResponse(content=result)
 
-# Retrieve a single essay detail (teacher dashboard)
-@app.get("/api/show_essay/{eid}")
-async def api_show_essay(eid: str):
-    result = get_essay_detail(eid)
-    if result.get("success"):
-        return JSONResponse(content=result)
-    return JSONResponse(content=result, status_code=404)
-
-# Retrieve raw essay_info by eid (teacher dashboard)
-@app.get("/api/essay_info/{eid}")
-async def api_get_essay_info(eid: str):
-    result = get_essay_info(eid)
-    if result.get("success"):
-        return JSONResponse(content=result)
-    return JSONResponse(content=result, status_code=404)
-
 # Update the prediction verification counter
 @app.post("/update_prediction_count/{pid}")
 async def api_update_prediction_count(pid: str):
     result = update_prediction_check_count(pid)
     return JSONResponse(content=result)
 
+# Retrieve all essays for the teacher dashboard
 @app.get("/api/get_all_essay_list")
-async def api_get_all_essay_list(page: int = 1, page_size: int = 20):
-    result = get_all_essay_list(page=page, page_size=page_size)
+async def api_get_all_essay_list():
+    result = get_all_essay_list()
     if result["success"]:
         return JSONResponse(content={
             "success": True,
-            "data": result["data"],
-            "total": result.get("total", 0),
-            "page": page,
-            "page_size": page_size
+            "data": result["data"]
         })
     else:
         return JSONResponse(
@@ -688,21 +550,6 @@ async def api_get_all_essay_list(page: int = 1, page_size: int = 20):
             },
             status_code=500
         )
-
-# Teacher dashboard helpers
-@app.get("/api/essay_images/{eid}")
-async def api_get_essay_images(eid: str):
-    result = get_images_by_eid(eid)
-    if result.get("success"):
-        return JSONResponse(content=result)
-    return JSONResponse(content=result, status_code=500)
-
-@app.get("/api/essay_predictions/{eid}")
-async def api_get_essay_predictions(eid: str):
-    result = get_predictions_by_eid(eid)
-    if result.get("success"):
-        return JSONResponse(content=result)
-    return JSONResponse(content=result, status_code=500)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, timeout_keep_alive=120)

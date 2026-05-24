@@ -579,6 +579,9 @@ async function updateEssayContent() {
   try {
     const eid = sessionStorage.getItem("currentEid");
     const content = document.getElementById("editor").textContent;
+    const duration_sec = window.__TASK_TIMER__?.getElapsedSeconds
+      ? window.__TASK_TIMER__.getElapsedSeconds()
+      : null;
 
     const response = await fetch(`/update_pretest_essay/${eid}`, {
       method: "POST",
@@ -586,7 +589,7 @@ async function updateEssayContent() {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ content: content }),
+      body: JSON.stringify({ content: content, duration_sec }),
     });
 
     if (!response.ok) {

@@ -466,3 +466,14 @@
   padding: 0.35em 0.65em;
   font-size: 0.75rem;
 }
+
+.late-badge {
+  background-color: #fff3cd;
+  color: #8a5800;
+  border: 1px solid #ffe08a;
+}
+
+.essay-late-text {
+  color: #b54708;
+  font-weight: 600;
+}

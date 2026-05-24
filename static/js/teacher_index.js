@@ -54,6 +54,9 @@ function getAuthHeaders() {
 
 function getStudentId(essay) {
   return (
+    essay?.account ||
+    essay?.student_account ||
+    essay?.studentAccount ||
     essay?.sid ||
     essay?.student_id ||
     essay?.studentId ||
@@ -123,17 +126,128 @@ function buildStatusBadge(status) {
   return `<span class="${badgeClass}">${label}</span>`;
 }
 
+function buildLateBadge(essay) {
+  if (!essay?.is_late) {
+    return "";
+  }
+  return `<span class="badge late-badge">${essay.late_status_label || "Terlambat mengumpulkan"}</span>`;
+}
+
 function buildTaskCell(essay) {
   if (!essay) {
     return `<span class="text-muted">Belum ada</span>`;
   }
+  const durationLabel = formatDuration(essay.duration_sec);
   return `
     <div class="d-flex flex-column gap-1">
       ${buildStatusBadge(essay.status)}
+      ${buildLateBadge(essay)}
+      <small class="text-muted">Durasi: ${durationLabel}</small>
       <button type="button" class="btn btn-link p-0 view-essay-btn" data-eid="${essay.eid}">Lihat</button>
+      <button type="button" class="btn btn-outline-primary btn-sm export-essay-btn" data-eid="${essay.eid}">Ekstrak</button>
       <button type="button" class="btn btn-outline-danger btn-sm reset-essay-btn" data-eid="${essay.eid}">Reset</button>
     </div>
   `;
+}
+
+async function downloadEssayExport(essayId, format) {
+  const response = await fetch(`/api/export_essay/${essayId}?format=${format}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+
+  if (!response.ok) {
+    let message = "Gagal mengekstrak data.";
+    try {
+      const errorPayload = await response.json();
+      message = errorPayload?.message || errorPayload?.error || message;
+    } catch (error) {
+      console.error("Gagal membaca pesan error ekspor:", error);
+    }
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename=\"?([^"]+)\"?/i);
+  const fallbackExt = format === "pdf" ? "pdf" : "docx";
+  const filename = match?.[1] || `essay_${essayId}.${fallbackExt}`;
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+async function promptExportEssay(essayId) {
+  const result = await Swal.fire({
+    title: "Ekstrak Data",
+    text: "Pilih format file yang ingin diunduh.",
+    icon: "question",
+    showDenyButton: true,
+    showCancelButton: true,
+    confirmButtonText: "DOCX",
+    denyButtonText: "PDF",
+    cancelButtonText: "Batal",
+  });
+
+  if (result.isDismissed) {
+    return;
+  }
+
+  const format = result.isConfirmed ? "docx" : "pdf";
+
+  Swal.fire({
+    title: "Memproses",
+    text: "Dokumen sedang dibuat.",
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    },
+  });
+
+  try {
+    await downloadEssayExport(essayId, format);
+    await Swal.fire({
+      icon: "success",
+      title: "Berhasil",
+      text: `File ${format.toUpperCase()} berhasil dibuat.`,
+    });
+  } catch (error) {
+    console.error("Gagal mengekstrak esai:", error);
+    await Swal.fire({
+      icon: "error",
+      title: "Galat",
+      text: error?.message || "Gagal mengekstrak data.",
+    });
+  }
+}
+
+function formatDuration(totalSeconds) {
+  const seconds = Number(totalSeconds);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "-";
+  }
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  const parts = [];
+  if (hours > 0) {
+    parts.push(`${hours} jam`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes} menit`);
+  }
+  if (remainingSeconds > 0 || parts.length === 0) {
+    parts.push(`${remainingSeconds} detik`);
+  }
+  return parts.join(" ");
 }
 
 function escapeRegex(value) {
@@ -383,7 +497,7 @@ async function generateeable() {
       // Render basic table (server-side pagination)
       const thead = document.createElement("thead");
       const headRow = document.createElement("tr");
-      ["ID Siswa", "Nama Siswa", ...TASK_COLUMNS.map((t) => t.label)].forEach(
+      ["Akun Siswa", "Nama Siswa", ...TASK_COLUMNS.map((t) => t.label)].forEach(
         (label) => {
           const th = document.createElement("th");
           th.textContent = label;
@@ -465,6 +579,10 @@ async function generateeable() {
         const title = payload.title || `Esai ${essayId}`;
         const content = payload.content || "Tidak ada isi";
         const updatedAt = payload.last_updated || "-";
+        const durationLabel = formatDuration(payload.duration_sec);
+        const lateStatusHtml = payload.is_late
+          ? `<span class="essay-late-text">${payload.late_status_label || "Terlambat mengumpulkan"}</span>`
+          : `<span class="text-muted">Tidak terlambat</span>`;
 
         const [imagesRes, predictionsRes] = await Promise.all([
           fetch(`/api/essay_images/${essayId}`, { headers: { ...getAuthHeaders() } }),
@@ -525,9 +643,20 @@ async function generateeable() {
 
         const html = `
           <div class="essay-content">
-            <div class="essay-meta d-flex justify-content-between mb-3">
+            <div class="essay-meta d-flex justify-content-between flex-wrap gap-2 mb-3">
               <span><strong>ID:</strong> ${essayId}</span>
               <span><strong>Terakhir Modified:</strong> ${updatedAt}</span>
+              <span><strong>Status Keterlambatan:</strong> ${lateStatusHtml}</span>
+            </div>
+            <div class="essay-meta d-flex justify-content-between flex-wrap gap-2 mb-3">
+              <span><strong>Akun Siswa:</strong> ${payload.account || "-"}</span>
+              <span><strong>Deadline:</strong> ${payload.deadline_at || "-"}</span>
+              <span><strong>Durasi Pengerjaan:</strong> ${durationLabel}</span>
+            </div>
+            <div class="mb-3">
+              <button type="button" class="btn btn-outline-primary export-essay-btn" data-eid="${essayId}">
+                Ekstrak Data
+              </button>
             </div>
             <div class="mb-3">
               <h6><strong>Gambar</strong></h6>
@@ -576,6 +705,14 @@ async function generateeable() {
           width: "800px",
           showCloseButton: true,
           showConfirmButton: false,
+          didOpen: (modalElement) => {
+            const exportBtn = modalElement.querySelector(".export-essay-btn");
+            if (exportBtn) {
+              exportBtn.addEventListener("click", async () => {
+                await promptExportEssay(essayId);
+              });
+            }
+          },
           customClass: {
             container: "essay-swal-container",
             popup: "essay-swal-popup",
@@ -640,6 +777,15 @@ async function generateeable() {
           text: error?.message || "Gagal mereset esai.",
         });
       }
+    });
+
+    $("#essayeable").on("click", ".export-essay-btn", async function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const essayId = $(this).data("eid");
+      if (!essayId) return;
+      await promptExportEssay(essayId);
     });
 
     // arror handler
