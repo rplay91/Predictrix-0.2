@@ -39,11 +39,7 @@ This project was originally developed by Ben and later maintained as a research/
 - Pydantic
 - PyMySQL
 - OpenAI API
-- LangChain
-- ChromaDB
 - GraphRAG
-- Transformers / PyTorch
-- scikit-learn, pandas, NumPy, SciPy
 
 ### Frontend
 
