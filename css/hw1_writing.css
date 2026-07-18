@@ -1,0 +1,1042 @@
+:root {
+  --header-height: 60px;
+  --sidebar-width: 500px;
+  --primary-color: #11a683;
+  --text-color: #333;
+  --border-color: #e0e0e0;
+  --bg-color: #ffffff;
+  --sidebar-bg: #f8f9fa;
+
+  /* 狀態顏色 */
+  --success-color: #22c55e;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+  --highlight-color: #fef08a;
+
+  /* 文字大小 */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 20px;
+  --text-xl: 48px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.writing-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 頂部標題區域 */
+.writing-header {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  background-color: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.header-left {
+  flex: 1; /* 可伸縮但不壓縮按鈕區域 */
+  min-width: 0; /* 允許內容壓縮 */
+  overflow: hidden; /* 隱藏溢出內容 */
+}
+
+.header-left h1 {
+  white-space: nowrap; /* 防止換行 */
+  overflow: hidden; /* 隱藏溢出部分 */
+  text-overflow: ellipsis; /* 顯示省略號 */
+  margin: 0;
+}
+
+.header-center {
+  flex: 0 0 auto; /* 不伸縮，保持原有大小 */
+  margin: 0 10px; /* 兩側留間距 */
+}
+
+.header-right {
+  flex: 1; /* 改為 1，佔據三分之一空間 */
+  display: flex;
+  justify-content: flex-end; /* 靠右對齊 */
+}
+
+.header-countdown {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.writing-header h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--text-color);
+  white-space: nowrap;
+}
+
+.header-actions .btn-save {
+  padding: 8px 16px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* 主要內容區域 */
+.main-content {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  transition: padding-right 0.3s ease;
+  padding-right: var(--sidebar-width);
+}
+
+/* 功能列收合時的主內容區域 */
+.main-content.sidebar-collapsed {
+  padding-right: 0; /* 收合時移除預留空間 */
+}
+
+/* 區域標題樣式 */
+.area-title {
+  font-family: "Google Sans", "Roboto", Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #5f6368;
+  margin: 0 20px;
+  padding: 4px 0; /* 修改：減少上下 padding */
+  letter-spacing: 0.25px;
+}
+
+/* 編輯器區域 */
+.editor-section {
+  flex: 0 1 800px;
+  width: 100%; /* 添加這行 */
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--header-height));
+  overflow: visible;
+  transition: width 0.3s ease; /* 添加過渡效果 */
+}
+
+.editor-container {
+  flex: 1.5;
+  margin: 20px;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05),
+    0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  margin-top: 0; /* 移除上方邊距 */
+  min-width: 0;
+  height: 300px; /* 添加固定高度 */
+  overflow-y: auto; /* 添加垂直滾動 */
+}
+
+.editor-container:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.1),
+    0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.editor {
+  width: 100%;
+  height: 100%;
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-color);
+  outline: none;
+}
+
+.context-container {
+  position: relative;
+  flex: 1.5;
+  margin: 0 20px 20px;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05),
+    0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  overflow-x: auto;
+  overflow-y: visible; /* 改為 visible 允許內容完整顯示 */
+  min-width: 0;
+  display: flex;
+  align-items: flex-start; /* 改為頂部對齊 */
+}
+
+/* 右側功能面板 */
+.sidebar {
+  position: absolute; /* 修改：改為絕對定位 */
+  right: 0; /* 添加：靠右對齊 */
+  top: 0; /* 添加：從頂部開始 */
+  bottom: 0; /* 添加：延伸到底部 */
+  width: var(--sidebar-width);
+  background-color: var(--sidebar-bg);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease;
+  z-index: 90;
+}
+
+.sidebar.collapsed {
+  transform: translateX(100%);
+}
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 15px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-color);
+}
+
+.tab-btn.active {
+  color: var(--primary-color);
+  border-bottom: 2px solid var(--primary-color);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tab-panel {
+  display: none;
+  padding: 20px;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* 資源面板樣式 */
+.resources-container {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  min-width: min-content;
+  width: 100%;
+  flex-wrap: nowrap;
+  align-items: stretch; /* 讓所有卡片高度一致 */
+}
+
+.resource-item {
+  flex: 0 0 300px;
+  width: 300px;
+  margin: 10px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: white;
+  flex-shrink: 0;
+  transition: all 0.3s ease; /* 添加轉場效果 */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* 初始陰影 */
+}
+
+.resource-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary-color); /* 懸停時改變邊框顏色 */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* 懸停時加深陰影 */
+}
+
+.resource-image {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+.resource-info {
+  padding: 15px;
+}
+
+.resource-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.keyword-chip {
+  padding: 4px 8px;
+  background-color: #e8f0fe;
+  color: #1967d2;
+  border-radius: 16px;
+  font-size: 12px;
+}
+
+/* 側邊欄收合按鈕 */
+.sidebar-toggle {
+  position: absolute;
+  left: -16px; /* 調整位置，使按鈕露出在側邊欄外 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: -2px 0 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+  z-index: 100; /* 確保按鈕始終顯示在最上層 */
+}
+
+.sidebar-toggle i {
+  font-size: 16px;
+  color: var(--text-color);
+  transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  transform: translate(-16px, -50%) rotate(180deg);
+}
+
+/* 倒數計時區域樣式 */
+.countdown-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  text-align: center;
+}
+
+.countdown-timer {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-color);
+  white-space: nowrap;
+}
+
+.submit-button {
+  padding: 8px 16px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: var(--text-base);
+  transition: background-color 0.2s;
+}
+
+.submit-button:hover {
+  background-color: #0d8b6c;
+}
+
+.header-right .submit-button {
+  padding: 4px 12px; /* 縮小 padding */
+  font-size: var(--text-sm); /* 較小的字體 */
+  white-space: nowrap;
+}
+
+.header-center .submit-button {
+  padding: 4px 12px; /* 縮小 padding */
+  font-size: var(--text-sm); /* 較小的字體 */
+  white-space: nowrap;
+}
+
+.header-left .submit-button {
+  padding: 4px 12px; /* 縮小 padding */
+  font-size: var(--text-sm); /* 較小的字體 */
+  white-space: nowrap;
+}
+
+.submit-button:hover,
+.header-right .submit-button:hover {
+  background-color: #0d8b6c;
+}
+
+/* Prediction 面板樣式 */
+.prediction-content {
+  padding: 20px;
+  width: 100%; /* 保持 100% */
+  max-width: 600px; /* 增加最大寬度 */
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+/* 寫作指引區塊樣式 */
+.instruction-box {
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto 16px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  display: flex; /* 新增 */
+  flex-direction: column; /* 新增 */
+  align-items: center; /* 新增 */
+}
+
+.instruction-header {
+  width: 100%; /* 新增 */
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 新增 */
+  gap: 8px;
+  padding: 12px;
+  color: #666;
+  font-size: var(--text-sm);
+}
+
+.instruction-header:hover {
+  color: #0b6efd;
+}
+
+.instruction-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.instruction-icon.open {
+  transform: rotate(180deg);
+}
+
+.instruction-content {
+  padding: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  font-size: var(--text-sm);
+  color: #666;
+}
+
+.instruction-box.expanded .instruction-icon {
+  transform: rotate(180deg);
+}
+
+.instruction-box.expanded .instruction-content {
+  max-height: none; /* 移除高度限制 */
+  overflow-y: visible; /* 允許內容完整顯示 */
+  padding: 0 12px 12px 12px;
+  max-height: 200px;
+}
+
+.toggle-icon {
+  transition: transform 0.3s ease;
+}
+
+.toggle-icon.open {
+  transform: rotate(180deg);
+}
+
+.prediction-instruction {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text-color);
+  font-size: 14px;
+}
+
+.prediction-controls {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 置中對齊 */
+  width: 90%;
+  margin-bottom: 20px;
+  max-width: 450px;
+}
+
+.prediction-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.1);
+  display: none;
+  cursor: not-allowed;
+  z-index: 10;
+}
+
+.prediction-overlay.active {
+  display: block;
+}
+
+.prediction-status {
+  width: 100%;
+  text-align: center;
+  color: var(--error-color); /* 預設使用紅色 */
+}
+
+.prediction-status.success {
+  color: #16a34a;
+}
+
+.status-error {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.status-success {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+
+.prediction-status.valid {
+  color: var(--primary-color); /* 有效狀態時使用主題色 */
+}
+
+/* Prediction 按鈕樣式 */
+#predictionBtn {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+#predictionBtn:not(:disabled) {
+  background-color: var(--primary-color);
+  color: white;
+  cursor: pointer;
+}
+
+#predictionBtn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.prediction-result-card {
+  width: 90%; /* 使用百分比寬度 */
+  max-width: 450px; /* 設定最大寬度 */
+  margin: 16px auto;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: white; /* 加回白色背景 */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); /* 加入輕微陰影 */
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.card-id {
+  font-size: var(--text-xs);
+  color: #666;
+}
+
+.info-icon {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  color: #666;
+  display: none; /* 預設隱藏 */
+}
+
+.info-icon.show {
+  display: block;
+}
+
+.info-icon:hover {
+  color: var(--text-color);
+}
+
+.prediction-text {
+  width: 100%; /* 改為 100% */
+  padding: 12px;
+  margin-bottom: 16px;
+  background-color: #f5f5f5;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  box-sizing: border-box; /* 加入這行確保 padding 不會增加寬度 */
+}
+
+.prediction-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between; /* 改為 space-between */
+  width: 100%;
+}
+
+.prediction-btn {
+  flex: 1;
+  min-width: 0; /* 移除最小寬度限制 */
+  padding: 8px 4px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prediction-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prediction-btn.selected {
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+}
+
+.prediction-btn.selected:hover {
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+}
+
+.prediction-history-title {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #333;
+  padding: 15px 0;
+  margin: 15px 0;
+  border-bottom: 2px solid #e0e0e0;
+  text-align: center; /* 修改：從 left 改為 center */
+  width: 100%;
+  display: flex; /* 新增 */
+  justify-content: center; /* 新增：確保完全置中 */
+}
+
+/* 預測等待視窗樣式 */
+.prediction-waiting {
+  text-align: center;
+  padding: 20px;
+}
+
+.countdown {
+  font-size: var(--text-xl);
+  font-weight: bold;
+  color: var(--primary-color);
+  margin: 20px 0;
+  animation: pulse 1s infinite;
+}
+
+.prediction-busy {
+  text-align: center;
+  padding: 20px;
+}
+
+.busy-spinner {
+  font-size: 40px;
+  color: var(--primary-color);
+  margin: 20px 0;
+}
+
+.busy-spinner i {
+  animation: spin 2s linear infinite;
+}
+
+/* 動畫效果 */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* 在不同螢幕尺寸下的響應式設計 */
+@media screen and (max-width: 768px) {
+  /* 主內容區域不需要預留功能列空間 */
+  .main-content {
+    padding-right: 0;
+  }
+
+  /* 確保 editor-section 佔滿寬度 */
+  .editor-section {
+    width: 100%;
+    flex: 1;
+  }
+
+  /* context-container 保持原有布局 */
+  .context-container {
+    margin: 10px;
+    padding: 15px;
+    max-height: none; /* 移除最大高度限制 */
+  }
+
+  .resources-container {
+    padding: 15px;
+    gap: 15px;
+  }
+
+  .resource-item {
+    flex: 0 0 280px;
+    width: 280px;
+    margin: 0; /* 移除邊距 */
+  }
+
+  .resource-item:hover {
+    transform: translateY(-1px); /* 小螢幕時降低位移幅度 */
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+  }
+
+  /* 功能列展開/收合時的轉場效果 */
+  .sidebar.collapsed {
+    transform: translateX(100%);
+  }
+  .sidebar {
+    position: fixed;
+    top: var(--header-height);
+    right: 0;
+    bottom: 0;
+    width: 80vw;
+    max-width: var(--sidebar-width);
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+  }
+
+  .sidebar.collapsed {
+    transform: translateX(100%); /* 修改：完全隱藏側邊欄 */
+  }
+
+  .sidebar-toggle {
+    left: -32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+  }
+
+  .sidebar.collapsed .sidebar-toggle {
+    left: -32px;
+    transform: translateY(-50%);
+  }
+
+  .sidebar.collapsed .sidebar-toggle i {
+    transform: rotate(180deg); /* 添加這行：旋轉圖示 */
+  }
+
+  .resources-container {
+    padding: 10px;
+    justify-content: center;
+  }
+
+  .resource-item {
+    flex: 0 0 calc(100% - 20px); /* 減去左右 margin */
+    max-width: 100%;
+    margin: 10px;
+  }
+
+  .prediction-content {
+    max-width: 100%;
+    padding: 15px;
+  }
+
+  .instruction-box,
+  .prediction-controls,
+  .prediction-result-card {
+    width: 100%;
+    max-width: none;
+  }
+
+  .prediction-actions {
+    gap: 6px;
+  }
+
+  .prediction-btn {
+    padding: 8px 4px;
+    font-size: var(--text-sm);
+  }
+
+  .prediction-history-title {
+    font-size: 1rem;
+    padding: 12px 0;
+    margin: 12px 0;
+    text-align: center;
+  }
+
+  .countdown {
+    font-size: calc(var(--text-xl) * 0.8);
+  }
+
+  .busy-spinner {
+    font-size: 32px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .context-container {
+    margin: 5px;
+    padding: 10px;
+  }
+
+  .resources-container {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .resource-item {
+    flex: 0 0 260px;
+    width: 260px;
+  }
+
+  .countdown {
+    font-size: calc(var(--text-xl) * 0.6);
+  }
+
+  .busy-spinner {
+    font-size: 28px;
+  }
+}
+
+@media screen and (max-width: 375px) {
+  .sidebar {
+    width: 90vw;
+  }
+
+  .sidebar-toggle {
+    width: 28px;
+    height: 28px;
+    left: -28px;
+  }
+
+  .sidebar.collapsed .sidebar-toggle {
+    left: -28px;
+    transform: translateY(-50%);
+  }
+
+  .sidebar.collapsed .sidebar-toggle i {
+    transform: rotate(180deg); /* 添加這行：旋轉圖示 */
+  }
+
+  .prediction-actions {
+    gap: 4px;
+  }
+
+  .prediction-btn {
+    padding: 6px 2px;
+    font-size: var(--text-xs);
+  }
+}
+
+@media screen and (max-width: 320px) {
+  .sidebar {
+    width: 95vw;
+  }
+
+  .sidebar-toggle {
+    width: 24px;
+    height: 24px;
+    left: -24px;
+  }
+
+  .sidebar.collapsed .sidebar-toggle {
+    left: -24px;
+    transform: translateY(-50%);
+  }
+
+  .sidebar.collapsed .sidebar-toggle i {
+    transform: rotate(180deg); /* 添加這行：旋轉圖示 */
+  }
+
+  .prediction-actions {
+    gap: 2px;
+  }
+
+  .prediction-btn {
+    padding: 6px 1px;
+    font-size: calc(var(--text-xs) - 1px);
+  }
+}
+
+.highlighted-text {
+  background-color: var(--highlight-color);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.btn-correct {
+  background: var(--success-color);
+  color: white;
+}
+
+.btn-modify {
+  background: var(--warning-color);
+  color: white;
+}
+
+.btn-incorrect {
+  background: var(--error-color);
+  color: white;
+}
+
+.edit-container {
+  margin-top: 12px;
+  display: none;
+  width: 100%;
+}
+
+.edit-container.show {
+  display: block;
+}
+
+.edit-container .prediction-btn {
+  width: 100%; /* 和編輯框同寬 */
+  margin-top: 8px;
+}
+
+.edit-input {
+  width: 100%; /* 改為 100% */
+  height: 100px;
+  padding: 12px;
+  background-color: #f5f5f5;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  resize: none;
+  margin-bottom: 8px;
+  box-sizing: border-box; /* 加入這行確保 padding 不會增加寬度 */
+}
+
+.edit-input.disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.edit-input:not([readonly]) {
+  background: #ffffff;
+  border-color: var(--primary-color);
+}
+
+.highlighted {
+  background-color: #fef08a;
+}
+
+.prediction-mark {
+  display: inline;
+  padding: 2px 4px;
+  margin: 0 2px;
+  background-color: var(--highlight-color);
+  border-radius: 2px;
+}
+
+.text-align-left-popup .swal2-html-container {
+  text-align: left !important;
+}
+
+.prediction-record-container {
+  text-align: left;
+}
+
+/* 標題區域樣式 */
+.topic-title {
+  padding: 5px 15px;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 添加置中對齊 */
+  gap: 8px;
+}
+
+.topic-label {
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.topic-title h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+/* 添加到您的 CSS 文件中 */
+.resource-modal {
+  text-align: left;
+  padding: 20px;
+}
+
+.modal-image-container {
+  margin-bottom: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-image {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.modal-content {
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.modal-keywords {
+  margin-bottom: 20px;
+}
+
+.modal-keywords h3,
+.modal-description h3 {
+  margin-bottom: 10px;
+  color: #333;
+  font-size: 1.2em;
+}
+
+.modal-keywords-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modal-keyword-chip {
+  background: #e8f0fe;
+  color: #1a73e8;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+}
+
+.modal-description p {
+  margin: 0;
+  line-height: 1.6;
+  color: #555;
+}
+
+.resource-modal-popup {
+  max-width: 1200px;
+}
