@@ -1,0 +1,468 @@
+/* Welcome Section Styles */
+.welcome-section {
+  padding: 2rem 0;
+  background-color: #f8f9fa;
+  border-radius: 0.35rem;
+  margin-bottom: 1.5rem;
+}
+
+.welcome-content h1 {
+  color: #212529;
+  margin-bottom: 0.5rem;
+  font-weight: 400;
+}
+
+.welcome-content p {
+  color: #6c757d;
+  margin-bottom: 0;
+}
+
+/* Table Card Styles */
+.card {
+  border: none;
+  background: linear-gradient(to bottom, #ffffff, #f8f9fa);
+  box-shadow: 0 4px 12px rgba(149, 157, 165, 0.1);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.card-header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: none;
+  padding: 0.75rem 1rem;
+}
+
+.card-body {
+  padding: 0.75rem;
+}
+
+/* DataTable Styles */
+.dataTables_wrapper {
+  margin-bottom: 1rem;
+}
+
+#essayTable {
+  width: 100% !important;
+  margin: 0 !important;
+  background-color: #fff;
+  border-collapse: collapse;
+}
+
+#essayTable thead th {
+  font-weight: 600;
+  color: #4e73df;
+  border-bottom: 2px solid #e3e6f0;
+  white-space: nowrap;
+}
+
+#essayTable tbody td {
+  color: #858796;
+  padding: 1rem;
+  vertical-align: middle;
+  border-bottom: 1px solid #e3e6f0;
+}
+
+/* Status Colors */
+.status-completed {
+  color: #1cc88a;
+  font-weight: 500;
+}
+
+.status-edited {
+  color: #f6c23e;
+  font-weight: 500;
+}
+
+.status-cancel {
+  color: #df4e4e;
+  font-weight: 500;
+}
+
+/* Score Cells */
+.score-cell {
+  text-align: center;
+  font-weight: 500;
+  color: #5a5c69;
+}
+
+/* DataTables Controls */
+.dataTables_length select {
+  padding: 0.375rem 1.75rem 0.375rem 0.75rem;
+  border: 1px solid #d1d3e2;
+  border-radius: 0.35rem;
+  color: #6e707e;
+}
+
+.dataTables_filter input {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #d1d3e2;
+  border-radius: 0.35rem;
+  color: #6e707e;
+  margin-left: 0.5rem;
+}
+
+/* Buttons Styling */
+.dt-buttons {
+  margin-bottom: 1rem;
+}
+
+.dt-button {
+  color: #fff !important;
+  background-color: #4e73df !important;
+  border: none !important;
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+  border-radius: 0.2rem !important;
+  margin-right: 0.5rem !important;
+}
+
+.dt-button:hover {
+  background-color: #2e59d9 !important;
+}
+
+/* Pagination */
+.dataTables_paginate {
+  padding-top: 0.75rem;
+}
+
+.paginate_button {
+  padding: 0.5rem 0.75rem;
+  margin: 0 0.25rem;
+  color: #4e73df !important;
+  background-color: #fff !important;
+  border: 1px solid #dddfeb !important;
+  border-radius: 0.35rem;
+}
+
+.paginate_button.current {
+  color: #fff !important;
+  background-color: #4e73df !important;
+  border-color: #4e73df !important;
+}
+
+.paginate_button:hover:not(.current) {
+  color: #4e73df !important;
+  background-color: #eaecf4 !important;
+  border-color: #dddfeb !important;
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
+  .card-body {
+    padding: 1rem;
+  }
+
+  #essayTable thead th,
+  #essayTable tbody td {
+    padding: 0.75rem;
+  }
+
+  .dt-buttons {
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Layout Transitions */
+#layoutSidenav_content {
+  transition: margin 0.15s ease-in-out;
+}
+
+.table-responsive {
+  transition: all 0.15s ease-in-out;
+}
+
+.score-input {
+  min-width: 60px;
+  max-width: 60px;
+  padding: 0.25rem;
+  text-align: center;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+}
+
+.score-input:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.score-input::-webkit-inner-spin-button,
+.score-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.save-score {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.view-essay-btn {
+  color: #007bff;
+  padding: 0.25rem 0.5rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.view-essay-btn:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
+
+.essay-swal-popup {
+  padding: 20px;
+  max-height: 90vh !important; /* 設定最大高度 */
+  overflow-y: auto !important; /* 啟用垂直滾動 */
+}
+
+.essay-images {
+  width: 100% !important;
+  margin: 0 auto 20px;
+}
+
+.image-info {
+  width: 100%;
+  padding: 15px;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+.content-area {
+  background-color: #fff;
+  padding: 15px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  min-height: 100px;
+  max-height: none !important; /* 移除最大高度限制 */
+  overflow-y: visible !important; /* 移除內容區域的滾動 */
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.carousel-control-prev,
+.carousel-control-next {
+  width: 40px;
+  height: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+.essay-meta {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.essay-meta span {
+  white-space: nowrap;
+}
+
+.keywords-container {
+  margin: 10px 0;
+  overflow: visible;
+}
+
+.keyword-bubble {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: #e9ecef;
+  border-radius: 20px;
+  margin: 3px;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.text-start {
+  text-align: left !important;
+}
+
+.essay-images img {
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.carousel-item {
+  background-color: #f8f9fa;
+  padding: 15px;
+  width: 100%;
+}
+
+.carousel-control-prev,
+.carousel-control-next {
+  width: 10%;
+  opacity: 0.8;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  height: 40px;
+  width: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.content-title {
+  color: #333;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.essay-text {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+}
+
+/* Sweet Alert 容器樣式 */
+.swal2-container {
+  padding: 15px !important;
+}
+
+.swal2-popup {
+  width: 80vw !important; /* 設定寬度為視窗寬度的 80% */
+  max-width: 1200px !important; /* 設定最大寬度，避免在大螢幕上過寬 */
+}
+
+/* 確保視窗內容可以完整顯示 */
+.swal2-html-container {
+  margin: 0 !important;
+  overflow-y: visible !important;
+}
+
+/* 優化大尺寸視窗的內容排版 */
+.essay-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 調整圖片大小以適應更寬的視窗 */
+.carousel-item img {
+  max-height: 450px; /* 增加圖片最大高度 */
+  width: auto;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+/* 導覽列 */
+.info-section {
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 0.25rem;
+  min-height: auto;
+}
+
+.essay-timeline {
+  flex: 1;
+  min-height: 200px; /* 設定最小高度 */
+}
+
+.timeline-item {
+  background: #ffffff;
+  border-left: 3px solid #0d6efd;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.timeline-item:hover {
+  transform: translateX(5px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.status-guide {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.status-item {
+  background: #ffffff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.status-item:hover {
+  transform: translateX(-5px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.status-description {
+  margin-left: 0.5rem;
+}
+
+.status-description strong {
+  font-size: 0.9rem;
+}
+
+.status-description p {
+  font-size: 0.8rem;
+  margin: 0.2rem 0 0 0;
+}
+
+/* 狀態項目顏色 */
+.status-item:nth-child(1) {
+  border-right-color: #28a745;
+}
+
+.status-item:nth-child(2) {
+  border-right-color: #ffc107;
+}
+
+.status-item:nth-child(3) {
+  border-right-color: #dc3545;
+}
+
+.card-header .fa-chevron-down {
+  transition: transform 0.3s ease;
+}
+
+.card-header[aria-expanded="true"] .fa-chevron-down {
+  transform: rotate(180deg);
+}
+
+/* 置中標題 */
+.card-header h5 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.card-header i {
+  color: #6c757d;
+  transition: transform 0.3s ease;
+}
+
+/* 標題排版優化 */
+.fw-bold {
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+.text-muted {
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+/* 徽章樣式 */
+.badge {
+  padding: 0.35em 0.65em;
+  font-size: 0.75rem;
+}

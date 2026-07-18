@@ -1,0 +1,217 @@
+/* 文章容器樣式 */
+.articles-container {
+  --container-max-width: 1400px;
+  --container-padding: 20px;
+  --hover-transform-distance: -5px;
+  --hover-shadow-color: rgba(0, 0, 0, 0.2);
+  --hover-shadow-size: 15px;
+  --transition-duration: 0.2s;
+  --hover-scale: 1.03; /* 移到這裡，確保全域可用 */
+  --hover-transform-distance: -5px; /* 懸停時上移距離 */
+
+  max-width: var(--container-max-width);
+  padding: var(--container-padding);
+  margin: 0 auto;
+  width: 100%; /* 確保容器寬度完全填滿 */
+  transition: all var(--transition-duration) ease; /* 添加過渡效果 */
+}
+
+/* 文章卡片基本樣式 */
+.article-card {
+  --card-width: 230px;
+  --card-height: 280px;
+  --card-spacing: 1px;
+
+  width: var(--card-width);
+  min-width: var(--card-width);
+  max-width: var(--card-width);
+  height: var(--card-height);
+  margin: var(--card-spacing);
+  flex: 0 0 var(--card-width); /* 防止 flex 壓縮 */
+}
+
+/* 卡片容器樣式 */
+.article-card .card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 圖片容器 */
+.card-img-wrapper {
+  width: 100%;
+  height: 220px; /* 固定高度 */
+  background-color: #f8f9fa;
+  overflow: hidden;
+}
+
+.card-img-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* 確保圖片填滿且不變形 */
+}
+
+/* 卡片內容區域 */
+.card-body {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 卡片標題 */
+.card-title {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #202124;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 卡片內文 */
+.card-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #5f6368;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 元資訊區域 */
+.card-meta {
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: 14px;
+  color: #5f6368;
+  border-top: 1px solid #f1f3f4;
+}
+
+/* 懸停效果 */
+.article-card .card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* Google 風格的歡迎介面 */
+.welcome-section {
+  --welcome-spacing: 4rem;
+  padding-top: var(--welcome-spacing);
+  padding-bottom: calc(var(--welcome-spacing) / 3);
+}
+
+.welcome-content {
+  margin-bottom: 1rem;
+}
+
+.welcome-content h1 {
+  color: #202124;
+  font-weight: 400;
+}
+
+.welcome-content .lead {
+  color: #5f6368;
+  font-size: 1.25rem;
+}
+
+.welcome-actions .btn {
+  padding: 0.8rem 2rem;
+  border-radius: 2rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.welcome-actions .btn-primary {
+  background-color: #1a73e8;
+  border-color: #1a73e8;
+}
+
+.welcome-actions .btn-primary:hover {
+  background-color: #1557b0;
+  border-color: #1557b0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.welcome-actions .btn-outline-secondary {
+  color: #5f6368;
+  border-color: #dadce0;
+}
+
+.welcome-actions .btn-outline-secondary:hover {
+  background-color: #f8f9fa;
+  border-color: #dadce0;
+  color: #202124;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* 響應式布局 */
+/* 基本樣式 */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px; /* 縮小基本間距 */
+  padding: 0 8px;
+  transition: all var(--transition-duration) ease;
+}
+
+/* 小型手機螢幕 (576px 以下) */
+@media (max-width: 576px) {
+  .row {
+    justify-content: center;
+  }
+  .article-card {
+    flex: 0 0 100%; /* 一行顯示 1 個卡片 */
+  }
+}
+
+/* 大型手機到平板 (576px - 768px) */
+@media (min-width: 577px) and (max-width: 768px) {
+  .row {
+    justify-content: flex-start;
+  }
+  .article-card {
+    flex: 0 0 calc(50% - 10px); /* 一行顯示 2 個卡片 */
+  }
+}
+
+/* 平板到小型螢幕 (769px - 992px) */
+@media (min-width: 769px) and (max-width: 992px) {
+  .row {
+    justify-content: flex-start;
+  }
+  .article-card {
+    flex: 0 0 calc(33.333% - 14px); /* 一行顯示 3 個卡片 */
+  }
+}
+
+/* 中型螢幕 (993px - 1200px) */
+@media (min-width: 993px) and (max-width: 1200px) {
+  .row {
+    justify-content: flex-start;
+  }
+  .article-card {
+    flex: 0 0 calc(25% - 15px); /* 一行顯示 4 個卡片 */
+  }
+}
+
+/* 大型螢幕 (1200px 以上) */
+@media (min-width: 1201px) {
+  .row {
+    justify-content: flex-start;
+  }
+  .article-card {
+    flex: 0 0 calc(20% - 16px); /* 一行顯示 5 個卡片 */
+  }
+}

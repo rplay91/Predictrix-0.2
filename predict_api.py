@@ -5,13 +5,98 @@ import json
 import asyncio
 import time
 import re
+import os
 from collections import Counter
-from graphRAG.global_search import search_graph
 import pymysql
+import requests
 
 from api_config import GPT_API_KEY
 from db_config import DB_CONFIG
 client = OpenAI(api_key=GPT_API_KEY)
+
+# ── PTM RAG configuration ──────────────────────────────────────
+PTM_BASE_URL = os.getenv("PTM_BASE_URL", "http://140.115.126.108:5290")
+PTM_ADMIN_USER = os.getenv("PTM_ADMIN_USER", "admin")
+PTM_ADMIN_PASS = os.getenv("PTM_ADMIN_PASS", "admin123")
+PTM_USERS_FILE = os.path.join(os.path.dirname(__file__), "users_list.txt")
+
+_ptm_token = None
+
+# Build account → ptm_user_id lookup from users_list.txt
+# File format: "<ptm_id>: s<account>"
+_ptm_id_by_account = {}
+if os.path.exists(PTM_USERS_FILE):
+    with open(PTM_USERS_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if ":" in line:
+                parts = line.split(":", 1)
+                ptm_id = int(parts[0].strip())
+                username = parts[1].strip()
+                if username.startswith("s"):
+                    _ptm_id_by_account[username[1:]] = ptm_id
+
+def _lookup_ptm_user_id(sid: str) -> int | None:
+    """Look up PTM user_id using the student's DB account."""
+    if not sid:
+        return None
+    try:
+        conn = pymysql.connect(**DB_CONFIG)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT account FROM students WHERE sid = %s", (sid,))
+            row = cursor.fetchone()
+            if row and row["account"] in _ptm_id_by_account:
+                return _ptm_id_by_account[row["account"]]
+        return None
+    except Exception as e:
+        print(f"[WARN] Could not resolve PTM user for sid={sid}: {e}")
+        return None
+    finally:
+        if "conn" in dir():
+            conn.close()
+
+def _ptm_login():
+    """Login to PTM and cache the access token."""
+    global _ptm_token
+    r = requests.post(
+        f"{PTM_BASE_URL}/api/auth/token",
+        data={"username": PTM_ADMIN_USER, "password": PTM_ADMIN_PASS, "grant_type": "password"},
+        timeout=10,
+    )
+    r.raise_for_status()
+    _ptm_token = r.json()["access_token"]
+
+def _ptm_headers():
+    if not _ptm_token:
+        _ptm_login()
+    return {"Authorization": f"Bearer {_ptm_token}"}
+
+def ptm_rag_query(sid: str, query: str, top_k: int = 5) -> list[dict]:
+    """Query PTM RAG for a student and return the result nodes."""
+    ptm_user_id = _lookup_ptm_user_id(sid)
+    if ptm_user_id is None:
+        print(f"[WARN] No PTM user found for sid={sid}")
+        return []
+    try:
+        r = requests.post(
+            f"{PTM_BASE_URL}/api/rag/query",
+            json={"user_id": ptm_user_id, "query": query, "top_k": top_k},
+            headers=_ptm_headers(),
+            timeout=30,
+        )
+        if r.status_code == 401:
+            _ptm_login()
+            r = requests.post(
+                f"{PTM_BASE_URL}/api/rag/query",
+                json={"user_id": ptm_user_id, "query": query, "top_k": top_k},
+                headers=_ptm_headers(),
+                timeout=30,
+            )
+        r.raise_for_status()
+        return r.json().get("results", [])
+    except requests.RequestException as e:
+        print(f"[WARN] PTM RAG query failed: {e}")
+        return []
 
 
 ## add the reasoning Prompt for the component
@@ -547,6 +632,8 @@ The purpose of writing predicted sentence: {best_match_writing_purpose}
 
 # Result: generated questions
 async def answer_from_history(query):
+    from graphRAG.global_search import search_graph
+
     # Build prompt for retrieving factual answers from historical data
     user_prompt = f"""# Instruction:
 You are an AI assistant tasked with extracting accurate information from a provided Knowledge Graph subgraph. Your primary goal is to answer the user's question strictly based on the facts present in the Knowledge Graph supplied below. If the answer is not explicitly represented or cannot be directly inferred from the graph relations, respond with "No related information." Avoid making assumptions, adding external knowledge, or generating speculative answers. Please think step by step.
@@ -863,10 +950,22 @@ Three Sentence Pattern Options: {predict_sntence_pattern_options_list}
     best_match_sentence_pattern_highest_vote_result = max(best_match_sentence_pattern_vote_counts.values())
     best_match_sentence_pattern_winning_options = [option for option, count in best_match_sentence_pattern_vote_counts.items() if count == best_match_sentence_pattern_highest_vote_result]
 
+    # Helper to extract the option number from model output
+    def _extract_option_number(text: str) -> int | None:
+        if not text:
+            return None
+        cleaned = text.strip()
+        if cleaned.isdigit():
+            return int(cleaned)
+        digit_match = re.search(r"\d+", cleaned)
+        if digit_match:
+            return int(digit_match.group())
+        return None
+
     # Handle ties by triggering a tie-break vote
     if len(best_match_sentence_pattern_winning_options) > 1:
         # Prepare tie-breaking options for the sentence-pattern vote
-        tie_options = [predict_sntence_pattern_list[int(option) - 1] for option in best_match_sentence_pattern_winning_options]
+        tie_options = [predict_sntence_pattern_list[_extract_option_number(option) - 1] for option in best_match_sentence_pattern_winning_options]
         tie_options_list = "\n".join([f"{i+1}. {response}" for i, response in enumerate(tie_options)])
 
         # Build tie-breaking prompt for sentence-pattern selection
@@ -916,11 +1015,11 @@ Three Sentence Pattern Options: {predict_sntence_pattern_options_list}
         tie_vote_counts = Counter(tie_vote_results)
         tie_highest_vote_result = max(tie_vote_counts.values())
         tie_winning_options = [option for option, count in tie_vote_counts.items() if count == tie_highest_vote_result][0]
-        best_match_sentence_pattern = tie_options[int(tie_winning_options) - 1]
+        best_match_sentence_pattern = tie_options[_extract_option_number(tie_winning_options) - 1]
 
     else:
         best_match_sentence_pattern_winning_option = best_match_sentence_pattern_winning_options[0]
-        best_match_sentence_pattern = predict_sntence_pattern_list[int(best_match_sentence_pattern_winning_option) - 1]
+        best_match_sentence_pattern = predict_sntence_pattern_list[_extract_option_number(best_match_sentence_pattern_winning_option) - 1]
         # Debug prints removed to avoid non-English output
         # Debug prints removed to avoid non-English output
     
@@ -1041,15 +1140,16 @@ def predict_sentence(
 
     # Build prompt for generating the predicted sentence
     user_prompt = f"""# Instruction:
-You are an AI writing assistant specialized in predicting a sentence within a user’s English essay. 
-Your task is to generate ONE predicted sentence based on the provided full context. 
-The sentence must align with the essay's **core topic**, as defined by the Title and Context, and must not deviate from the main subject. 
+You are an AI writing assistant specialized in predicting sentences within a student's English journal essay.
+Your task is to generate 2 to 3 predicted sentences that match the **student's actual writing style** — be specific, concrete, and personal, just like the student writes.
+The sentences must align with the essay's **core topic**, as defined by the Title and Context, and must not deviate from the main subject.
+Each sentence should be natural, flow from the previous content, and include **specific details** (times, locations, activities, feelings, people) drawn from the essay itself rather than generic reflections.
 Please think step by step!
 
 # Input Detail:
 - Essay Title: The title defines the essay's core topic and sets the overall direction.
 - Contextual Information: Background descriptions and keywords that represent the essay's intent and audience perspective.
-- Essay Content: The entire essay text, with one paragraph containing the marker [PREDICTED SENTENCE], which is where the sentence will be inserted.
+- Essay Content: The entire essay text, with one paragraph containing the marker [PREDICTED SENTENCE], which is where the sentences will be inserted.
 - Writing Purpose: The intent or goal for adding the predicted sentence.
 - Writing Pattern: The organizational structure of the essay.
 - Writing Features: The stylistic and linguistic tone.
@@ -1099,55 +1199,50 @@ Reasoning Summary:
 
 
 # Your Task:
-1. **Focus on the Core Topic:**
-   - Ensure the predicted sentence directly supports the essay's core topic as defined by the Title and Contextual Information.
-   - Identify the role of the predicted sentence (introducing an idea, providing evidence, offering a transition, or summarizing a point).
-   - Avoid introducing unrelated or tangential ideas.
+1. **Be Specific and Concrete (CRITICAL):**
+   - The student writes about real events with specific times (e.g. "around 6 PM", "at 7:30 AM"), specific places (e.g. "Mrs. Mull's Noodle", "the mosque"), specific activities (e.g. "practiced traditional dance", "grilled chicken", "Isha prayer"), and specific feelings.
+   - Your prediction MUST include concrete details drawn from the essay context. Do NOT replace them with generic summaries.
+   - BAD (too generic): "Overall, the balance of focused work and brief rest supported steady progress."
+   - GOOD (specific): "After eating, I reviewed my training notes and organized tasks for tomorrow."
 
-2. **Enhance Logical Flow:**
-   - The predicted sentence must connect seamlessly with the preceding and following sentences.
-   - Use transition words or phrases if necessary to enhance the flow.
+2. **Match the Student's Voice:**
+   - Use first-person ("I"), write in the same tense and tone as the essay.
+   - Use vocabulary and expressions that appear in the essay.
+   - If the student uses informal language (e.g. "it's what it's", "big smile"), match that tone.
 
-3. **Avoid Redundancy:**
-   - Do NOT repeat or paraphrase ideas already present in the essay.
-   - Check for semantic similarity (not just surface text).
+3. **Enhance Logical Flow:**
+   - The predicted sentences must connect seamlessly with the preceding content.
+   - Use transition words if appropriate, but keep it natural.
 
-4. **Preserve Logical Accuracy:**
-   - The predicted sentence MUST NOT introduce false or contradictory information.
+4. **Avoid Redundancy:**
+   - Do NOT repeat or paraphrase ideas already present in the preceding sentences.
 
-5. **Respect Contextual Consistency:**
-   - Align your sentence with the setting, tone, and real-world implications established by the essay.
-   - Use the contextual information and extracted vocabulary to maintain lexical cohesion.
+5. **Preserve Logical Accuracy:**
+   - The predicted sentences MUST NOT introduce false or contradictory information.
 
-6. **Natural Integration:**
-   - The sentence should enhance paragraph flow, connect ideas logically, and sound natural.
-
-7. **Maintain Stylistic Consistency:**
-   - Match tone and lexical choices used in the essay.
-   - Avoid figurative or emotional shifts unless already present.
-
-8. **Output a SINGLE Sentence Only.**
+6. **Output exactly 2 or 3 sentences.** Do NOT output more than 3.
 """
 
-    # Response schema for the predicted sentence
-    class PredictSentence(BaseModel):
-        predict_sentence: str
+    # Response schema for the predicted sentences
+    class PredictSentences(BaseModel):
+        predict_sentences: list[str]
 
     # Prepare payload
     messages = [{"role": "user", "content": user_prompt}]
 
     # Send request to model
-    predict_sentence = client.beta.chat.completions.parse(
-        model="gpt-5",  # or gpt-4o-mini, etc.
+    response = client.beta.chat.completions.parse(
+        model="gpt-5",
         reasoning_effort="low",
         messages=messages,
-        response_format=PredictSentence
+        response_format=PredictSentences
     )
 
-    # Extract predicted sentence
-    final_predict_sentence = predict_sentence.choices[0].message.parsed.predict_sentence
+    # Extract predicted sentences
+    predict_sentences = response.choices[0].message.parsed.predict_sentences
+    final_predict_sentence = " ".join(predict_sentences)
 
-    return final_predict_sentence, user_prompt
+    return final_predict_sentence, predict_sentences, user_prompt
 
 
 
@@ -1170,16 +1265,22 @@ def get_or_create_sentence_pattern(sid, eid, current_content, history_content, p
                     return row
 
             # 🔥 1. Generate new pattern (raw)
-            raw_result = identify_sentence_pattern(
-                current_content,
-                history_content,
-                purpose
-            )
+            try:
+                raw_result = identify_sentence_pattern(
+                    current_content,
+                    history_content,
+                    purpose
+                )
+                if not raw_result:
+                    raise ValueError("Empty pattern generated")
+                result = normalize_pattern_string(raw_result)
+                if not result:
+                    raise ValueError("Empty pattern after normalization")
+            except Exception as e:
+                print(f"[WARN] Pattern generation failed, using fallback: {e}")
+                result = "Type: General narrative summary"
 
-            # 🔥 2. Normalisasi agar bebas dari error
-            result = normalize_pattern_string(raw_result)
-
-            # 🔥 3. Simpan ke DB
+            # 🔥 2. Simpan ke DB
             insert_sql = """
                 INSERT INTO sentence_patterns (sid, eid, pattern_result)
                 VALUES (%s, %s, %s)
@@ -1235,7 +1336,7 @@ def normalize_pattern_string(value: str) -> str: # normalize "type:" from llm
 
             
 # Execute prediction
-async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, history_essay_content: str, images_info: List[dict], title: str) -> str:
+async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, history_essay_content: str, images_info: List[dict], title: str) -> tuple:
     start_time = time.time()  # Start time
     try:
         timeout = 100  # seconds
@@ -1278,7 +1379,24 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
                     answer_from_history_list += f"Question: {query}\nAnswer: {query_answer_from_history}\n\n"
             print(f"[DEBUG] Historical retrieval took {time.time() - history_start:.2f} s")
 
-            # 4b. Extract ranked snippets from raw history for additional context
+            # 4b. Query PTM RAG for cognitive model insights
+            ptm_start = time.time()
+            try:
+                ptm_results = ptm_rag_query(sid, best_match_writing_purpose, top_k=5)
+                if ptm_results:
+                    ptm_block = "\n--- Cognitive Model Insights (PTM) ---\n"
+                    for node in ptm_results:
+                        title = node.get("title", "")
+                        content = node.get("content", "")
+                        layer = node.get("layer", "")
+                        if title and content:
+                            ptm_block += f"[L{layer}] {title}\n{content}\n\n"
+                    answer_from_history_list += ptm_block
+            except Exception as e:
+                print(f"[WARN] PTM RAG failed: {e}")
+            print(f"[DEBUG] PTM RAG retrieval took {time.time() - ptm_start:.2f} s")
+
+            # 4c. Extract ranked snippets from raw history for additional context
             snippets_start = time.time()
             ranked_snippets = gpt_extract_ranked_snippets_from_raw_history(
                 client=client,
@@ -1335,9 +1453,9 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
             # print(f"[DEBUG] Vocabulary extraction took {time.time() - vocab_start:.2f} s")
             # print(f"[INFO] Extracted vocabulary info: {vocabulary_info}")
 
-            # 9. Generate predicted sentence
+            # 9. Generate predicted sentences
             predict_start = time.time()
-            final_predict_sentence, user_prompt = predict_sentence(
+            final_predict_sentence, predict_sentences_list, user_prompt = predict_sentence(
                 title,
                 context_info,
                 current_essay_content,
@@ -1347,31 +1465,29 @@ async def get_predict_sentence(sid: str, eid: int, current_essay_content: str, h
                 best_match_sentence_pattern,
                 writing_patterns_formatted_output,
                 writing_features_formatted_output,
-                # vocabulary_info  # ✅ new feature
             )
             if not final_predict_sentence:
                 raise ValueError("Model did not return a predicted sentence.")
             print(f"[DEBUG] Sentence prediction took {time.time() - predict_start:.2f} s")
 
-            return final_predict_sentence, user_prompt
+            return final_predict_sentence, predict_sentences_list, user_prompt
 
         # Run all steps with timeout protection
-        final_predict_sentence, user_prompt = await asyncio.wait_for(predict_with_timeout(), timeout=timeout)
+        final_predict_sentence, predict_sentences_list, user_prompt = await asyncio.wait_for(predict_with_timeout(), timeout=timeout)
         print(f"[DEBUG] Total prediction time: {time.time() - start_time:.2f} s")
 
-        return final_predict_sentence, user_prompt
+        return final_predict_sentence, predict_sentences_list, user_prompt
 
     except asyncio.TimeoutError:
         print(f"[WARNING] Prediction timed out after {time.time() - start_time:.2f} s")
-        raise TimeoutError("Prediction workflow exceeded the allowed time.")
+        return "", [], "Prediction timed out"
     except Exception as e:
         print(f"[ERROR] Prediction failed after {time.time() - start_time:.2f} s")
         print(f"[ERROR] Reason: {str(e)}")
-        raise e
+        return "", [], str(e)
 
 
             
-
 
 
 

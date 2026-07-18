@@ -1,0 +1,537 @@
+{
+  "results": [
+    {
+      "no": 1,
+      "sid": 3,
+      "account": "25051130001",
+      "eid": 46,
+      "topic": "Final Journal Reflections and Productive Day",
+      "ground_truth_sentence": "I went back home around 6 PM and took a well-deserved rest after a productive and meaningful day.",
+      "predicted_sentences": "In the evening at home, I paused to reflect on the day. Overall, the work and practice left me satisfied and grateful. As I finish this journal, I feel more confident and ready for tomorrow.",
+      "predicted_list": [
+        "In the evening at home, I paused to reflect on the day.",
+        "Overall, the work and practice left me satisfied and grateful.",
+        "As I finish this journal, I feel more confident and ready for tomorrow."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 2,
+      "sid": 4,
+      "account": "25051130002",
+      "eid": 93,
+      "topic": "All-Night Code and Futsal Project Defense",
+      "ground_truth_sentence": "By the way this Friday I have 8 credits, starting from 7:30 AM to 4:00 PM",
+      "predicted_sentences": "This step connected my earlier analysis and documentation with practical evidence. As a result, I could define the process and justify key design choices. Consequently, the day demonstrated a clear progression from preparation to application.",
+      "predicted_list": [
+        "This step connected my earlier analysis and documentation with practical evidence.",
+        "As a result, I could define the process and justify key design choices.",
+        "Consequently, the day demonstrated a clear progression from preparation to application."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 3,
+      "sid": 5,
+      "account": "25051130003",
+      "eid": 140,
+      "topic": "Focused Study, Afternoon Recharge, Balanced Day",
+      "ground_truth_sentence": "Overall, it felt like a balanced, steady, and rewarding way to close the day.",
+      "predicted_sentences": "Overall, the balance of focused work and brief rest supported steady progress toward this week’s goals. Therefore, I end the day prepared for tomorrow—beginning with a clear first priority and a calm mindset.",
+      "predicted_list": [
+        "Overall, the balance of focused work and brief rest supported steady progress toward this week’s goals.",
+        "Therefore, I end the day prepared for tomorrow—beginning with a clear first priority and a calm mindset."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 4,
+      "sid": 6,
+      "account": "25051130004",
+      "eid": 187,
+      "topic": "Presentation Success and Exhausted Reward",
+      "ground_truth_sentence": "Consider saying: 'My plan for tonight is to study for the upcoming eight final exams and then get ready for bed.'",
+      "predicted_sentences": "Therefore, the shared schedule with my classmates helped me transition smoothly between tasks. It showed me that simple routines and coordinated times reduce stress and keep me on track. After that, I set my alarm for tomorrow and went to bed.",
+      "predicted_list": [
+        "Therefore, the shared schedule with my classmates helped me transition smoothly between tasks.",
+        "It showed me that simple routines and coordinated times reduce stress and keep me on track.",
+        "After that, I set my alarm for tomorrow and went to bed."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 5,
+      "sid": 7,
+      "account": "25051130005",
+      "eid": 233,
+      "topic": "Exhausting Fulfillment and Project Triumph",
+      "ground_truth_sentence": "I’m grateful for the app it teaches us to be patient and stay consistent.",
+      "predicted_sentences": "By the end of the day, I was tired but proud of what I did. The progress in class and at home showed me that steady work matters. I will rest now so I can face next week’s exam with focus.",
+      "predicted_list": [
+        "By the end of the day, I was tired but proud of what I did.",
+        "The progress in class and at home showed me that steady work matters.",
+        "I will rest now so I can face next week’s exam with focus."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 6,
+      "sid": 8,
+      "account": "25051130006",
+      "eid": 280,
+      "topic": "Classwork, Circuits, and Group Progress",
+      "ground_truth_sentence": "The progress wasn't perfect.",
+      "predicted_sentences": "As a result, our next steps and priorities were clear. Therefore, I moved directly to group coordination to continue the circuit build according to our plan.",
+      "predicted_list": [
+        "As a result, our next steps and priorities were clear.",
+        "Therefore, I moved directly to group coordination to continue the circuit build according to our plan."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 8,
+      "sid": 10,
+      "account": "25051130008",
+      "eid": 374,
+      "topic": "Early Start, Deep Code, Shared Solutions",
+      "ground_truth_sentence": "The game helped me relieve stress and end the day with a lighter mood.",
+      "predicted_sentences": "When I fixed a difficult bug and the program ran, I felt clear progress and stayed motivated. When our simple circuit finally worked after many attempts, my sense of achievement grew. These small wins suggest that steady practice has a significant effect on my motivation.",
+      "predicted_list": [
+        "When I fixed a difficult bug and the program ran, I felt clear progress and stayed motivated.",
+        "When our simple circuit finally worked after many attempts, my sense of achievement grew.",
+        "These small wins suggest that steady practice has a significant effect on my motivation."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 9,
+      "sid": 11,
+      "account": "25051130009",
+      "eid": 421,
+      "topic": "Traffic Jams, Class Presentations, and Late Afternoon Rest",
+      "ground_truth_sentence": "When I arrived home, I took a shower and then rested.",
+      "predicted_sentences": "Therefore, the pace of the afternoon was set by the class schedule rather than my preference. This external structure guided the process from review to presentation. Consequently, I managed the transitions and completed the day’s tasks.",
+      "predicted_list": [
+        "Therefore, the pace of the afternoon was set by the class schedule rather than my preference.",
+        "This external structure guided the process from review to presentation.",
+        "Consequently, I managed the transitions and completed the day’s tasks."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 10,
+      "sid": 12,
+      "account": "25051130010",
+      "eid": 467,
+      "topic": "Café sleeps, class rush, warm grilled chicken night",
+      "ground_truth_sentence": "My friends from the mosque and I were going to grill chicken together; consequently, the night felt warm and fun, even though I started the day super early.",
+      "predicted_sentences": "However, I still needed to organize the night, and I checked my messages and confirmed what to do next. I reviewed my notes for a moment, and I set a simple plan to rest and prepare for tomorrow. Therefore, I decided to head back to the boarding house early and keep the plan focused and manageable.",
+      "predicted_list": [
+        "However, I still needed to organize the night, and I checked my messages and confirmed what to do next.",
+        "I reviewed my notes for a moment, and I set a simple plan to rest and prepare for tomorrow.",
+        "Therefore, I decided to head back to the boarding house early and keep the plan focused and manageable."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 11,
+      "sid": 13,
+      "account": "25051130011",
+      "eid": 512,
+      "topic": "Long Days, Sudden Rain, and a Smooth Presentation",
+      "ground_truth_sentence": "Then I went home, stopping for a quick bite to eat and to meet my special someone.",
+      "predicted_sentences": "After that, I considered the day’s tasks complete. The successful presentation and the rehearsal marked a clear close to my Friday on campus. Therefore, I will review my notes and prepare for the next class.",
+      "predicted_list": [
+        "After that, I considered the day’s tasks complete.",
+        "The successful presentation and the rehearsal marked a clear close to my Friday on campus.",
+        "Therefore, I will review my notes and prepare for the next class."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 13,
+      "sid": 15,
+      "account": "25051130013",
+      "eid": 606,
+      "topic": "Growth Realized on the Final Day",
+      "ground_truth_sentence": "It was a busy but enjoyable day that felt productive from start to finish.",
+      "predicted_sentences": "Overall, the sequence from class to prayer to presentation and social time showed a balanced day. As a result, I can see the impact of this process on my skills and confidence. I will keep this routine because small steps create steady improvement.",
+      "predicted_list": [
+        "Overall, the sequence from class to prayer to presentation and social time showed a balanced day.",
+        "As a result, I can see the impact of this process on my skills and confidence.",
+        "I will keep this routine because small steps create steady improvement."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 14,
+      "sid": 16,
+      "account": "25051130014",
+      "eid": 653,
+      "topic": "Lab Presentations Teamwork and Outreach Planning",
+      "ground_truth_sentence": "Overall, the day was productive and filled with learning, teamwork, and preparation for future activities.",
+      "predicted_sentences": "Afterward, I took a brief pause to reset before moving on. This small routine helped me shift from class tasks to planning duties. Later that night, I wrote down the next steps for tomorrow.",
+      "predicted_list": [
+        "Afterward, I took a brief pause to reset before moving on.",
+        "This small routine helped me shift from class tasks to planning duties.",
+        "Later that night, I wrote down the next steps for tomorrow."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 16,
+      "sid": 18,
+      "account": "25051130017",
+      "eid": 746,
+      "topic": "Productive Friday: Code, Prayer, and Project Progress",
+      "ground_truth_sentence": "Even though the day was tiring, the teamwork and shared effort made it feel productive and rewarding.",
+      "predicted_sentences": "In the evening, we concluded the session and I headed home. After a short rest, I took a brief walk to refresh my mind. Then I prepared for a calm night of light review.",
+      "predicted_list": [
+        "In the evening, we concluded the session and I headed home.",
+        "After a short rest, I took a brief walk to refresh my mind.",
+        "Then I prepared for a calm night of light review."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 17,
+      "sid": 19,
+      "account": "25051130018",
+      "eid": 793,
+      "topic": "Rushed Morning, Lab Work, and Group Project Success",
+      "ground_truth_sentence": "It was a busy Friday.",
+      "predicted_sentences": "Overall, the day felt productive and complete. I learned from the labs and our automatic lamp process. This closure helps me rest and prepare for tomorrow.",
+      "predicted_list": [
+        "Overall, the day felt productive and complete.",
+        "I learned from the labs and our automatic lamp process.",
+        "This closure helps me rest and prepare for tomorrow."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 18,
+      "sid": 20,
+      "account": "25051130019",
+      "eid": 840,
+      "topic": "Morning Prep Presentation Success and Comfort Food",
+      "ground_truth_sentence": "By the end of the day, I felt proud because I had completed my presentation smoothly and learned a lot from the experience.",
+      "predicted_sentences": "Therefore, my classmates’ nods and brief praise made the effort feel significant. Their attention seemed to improve my focus during the session. Consequently, I worked harder because I wanted to meet those expectations.",
+      "predicted_list": [
+        "Therefore, my classmates’ nods and brief praise made the effort feel significant.",
+        "Their attention seemed to improve my focus during the session.",
+        "Consequently, I worked harder because I wanted to meet those expectations."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 19,
+      "sid": 21,
+      "account": "25051130020",
+      "eid": 887,
+      "topic": "Project Deep Dive and Birthday Errands",
+      "ground_truth_sentence": "Even though the day was quite packed with classes, project work, and errands, I felt productive and happy to spend time with my friends while still getting important tasks done.",
+      "predicted_sentences": "Even so, I kept thinking about the interview that will check our understanding of how the program works. I felt a bit uneasy, but I plan to review each function and clarify the process before it arrives. Thus, today’s steps serve as a start toward more focused preparation.",
+      "predicted_list": [
+        "Even so, I kept thinking about the interview that will check our understanding of how the program works.",
+        "I felt a bit uneasy, but I plan to review each function and clarify the process before it arrives.",
+        "Thus, today’s steps serve as a start toward more focused preparation."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 20,
+      "sid": 22,
+      "account": "25051130021",
+      "eid": 934,
+      "topic": "Friday Rush: Prayer, Programming, and Project Presentation",
+      "ground_truth_sentence": "Then I attended the electronic digital class with my friend, and in the evening I rested for a while before going back to Magelang City.",
+      "predicted_sentences": "By late afternoon, the schedule kept me moving from one fixed point to the next. After the presentation, I headed home to rest and sort my notes. This clear sequence helps me separate study time from personal time.",
+      "predicted_list": [
+        "By late afternoon, the schedule kept me moving from one fixed point to the next.",
+        "After the presentation, I headed home to rest and sort my notes.",
+        "This clear sequence helps me separate study time from personal time."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 21,
+      "sid": 23,
+      "account": "25051130022",
+      "eid": 981,
+      "topic": "Morning Run, Kitchen Triumph, and Pilgrimage Prep",
+      "ground_truth_sentence": "Hopefully, the weather will be nice and the day goes smoothly.",
+      "predicted_sentences": "Tonight, I will check the schedule and pack a small bag with water and my ID. Tomorrow morning, I plan to meet the group early so we can depart on time. After the prayers, I hope to greet others and share a short conversation.",
+      "predicted_list": [
+        "Tonight, I will check the schedule and pack a small bag with water and my ID.",
+        "Tomorrow morning, I plan to meet the group early so we can depart on time.",
+        "After the prayers, I hope to greet others and share a short conversation."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 22,
+      "sid": 24,
+      "account": "25051130023",
+      "eid": 1028,
+      "topic": "Family Visit and a Peaceful Friday Farewell",
+      "ground_truth_sentence": "Goodbye.",
+      "predicted_sentences": "It shows how small routines can mark the boundary of the week. I am grateful for the quiet and ready to rest. Tomorrow can begin from this calm, steady place.",
+      "predicted_list": [
+        "It shows how small routines can mark the boundary of the week.",
+        "I am grateful for the quiet and ready to rest.",
+        "Tomorrow can begin from this calm, steady place."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 23,
+      "sid": 25,
+      "account": "25051130024",
+      "eid": 1075,
+      "topic": "Early Wake Up, Endless Waiting, Exhausted Sleep",
+      "ground_truth_sentence": "Im really tired after that, so im sleep in my friends house right now until tomorrow",
+      "predicted_sentences": "By evening, I finish my homework and prepare my bag for tomorrow. Then I set an alarm and write a short plan, because these steps help me stay on track.",
+      "predicted_list": [
+        "By evening, I finish my homework and prepare my bag for tomorrow.",
+        "Then I set an alarm and write a short plan, because these steps help me stay on track."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 24,
+      "sid": 26,
+      "account": "25051130025",
+      "eid": 1122,
+      "topic": "Test Finals, Project Planning, and Late Night Prep",
+      "ground_truth_sentence": "I was already out of social battery actually.",
+      "predicted_sentences": "Next, I set aside the two files for tomorrow and checked the schedule. Tomorrow morning, I will bring the final test and the kalender liturgi with me. Then I will go to the student center for D-day and the performance.",
+      "predicted_list": [
+        "Next, I set aside the two files for tomorrow and checked the schedule.",
+        "Tomorrow morning, I will bring the final test and the kalender liturgi with me.",
+        "Then I will go to the student center for D-day and the performance."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 25,
+      "sid": 27,
+      "account": "25051130026",
+      "eid": 1168,
+      "topic": "Campus Tech Haul and Evening Training",
+      "ground_truth_sentence": "after that i take some rest at my room before back home to Magelang",
+      "predicted_sentences": "After eating, I reviewed my training notes and organized tasks for tomorrow. Then I checked the game software to confirm the download and updates. Finally, I prepared to rest so I can stay focused for the next campus activities.",
+      "predicted_list": [
+        "After eating, I reviewed my training notes and organized tasks for tomorrow.",
+        "Then I checked the game software to confirm the download and updates.",
+        "Finally, I prepared to rest so I can stay focused for the next campus activities."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 26,
+      "sid": 28,
+      "account": "25051130027",
+      "eid": 1215,
+      "topic": "Workshop Hopes and Component Hunts",
+      "ground_truth_sentence": "Overall, today was tiring but productive, and I hope the next attempt goes better.",
+      "predicted_sentences": "The day’s structure kept me focused, and it helped me stay motivated. We will outline the next tests and check each component step by step, and we will try again with a clearer plan. The setback clarified what to improve, and it demonstrated that steady process leads to progress.",
+      "predicted_list": [
+        "The day’s structure kept me focused, and it helped me stay motivated.",
+        "We will outline the next tests and check each component step by step, and we will try again with a clearer plan.",
+        "The setback clarified what to improve, and it demonstrated that steady process leads to progress."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 28,
+      "sid": 30,
+      "account": "25051130029",
+      "eid": 1308,
+      "topic": "Arduino Victory and Shared Fried Rice",
+      "ground_truth_sentence": "I go home with big smile.",
+      "predicted_sentences": "Therefore, today showed me that careful checking and teamwork make problems possible to solve. I will finish the report and prepare for final testing tomorrow. I go home tired but satisfied because the project is almost done.",
+      "predicted_list": [
+        "Therefore, today showed me that careful checking and teamwork make problems possible to solve.",
+        "I will finish the report and prepare for final testing tomorrow.",
+        "I go home tired but satisfied because the project is almost done."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 29,
+      "sid": 31,
+      "account": "25051130030",
+      "eid": 1351,
+      "topic": "Lazy Morning, Gaming Afternoon, Longing for Home",
+      "ground_truth_sentence": "After that, I took a rest for a bit and thought about what I should do next.",
+      "predicted_sentences": "As the semester ends, I will set my travel date and buy the ticket early. First, I will finish the last in-person classes, then pack and plan the route. Until then, I will only go to campus when needed so I can save time and prepare.",
+      "predicted_list": [
+        "As the semester ends, I will set my travel date and buy the ticket early.",
+        "First, I will finish the last in-person classes, then pack and plan the route.",
+        "Until then, I will only go to campus when needed so I can save time and prepare."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 30,
+      "sid": 32,
+      "account": "25051130032",
+      "eid": 1398,
+      "topic": "Motorcycle Service and Campus Grind",
+      "ground_truth_sentence": "On the way home, I stopped to eat fried chicken and tofu, and then continued working on the remaining Lingojourn tasks.",
+      "predicted_sentences": "After the discussion, I summarized the next steps. Then I organized the project files for the team. This helped the handover process run smoothly.",
+      "predicted_list": [
+        "After the discussion, I summarized the next steps.",
+        "Then I organized the project files for the team.",
+        "This helped the handover process run smoothly."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 31,
+      "sid": 9,
+      "account": "25051130007",
+      "eid": 327,
+      "topic": "Code Review, Circuit Presentations, and Clothesline Models",
+      "ground_truth_sentence": "Although tiring, the day felt meaningful because I was able to complete many responsibilities while learning extensively throughout the process.",
+      "predicted_sentences": "I have consolidated the key lessons from the reviews and presentations. I have organized my materials for the interview exam and outlined next steps for the hardware version. As a result, the day has strengthened my understanding and prepared me for tomorrow.",
+      "predicted_list": [
+        "I have consolidated the key lessons from the reviews and presentations.",
+        "I have organized my materials for the interview exam and outlined next steps for the hardware version.",
+        "As a result, the day has strengthened my understanding and prepared me for tomorrow."
+      ],
+      "bge_m3_score": ""
+    },
+    {
+      "no": 28,
+      "sid": 14,
+      "account": "25051130012",
+      "eid": 559,
+      "topic": "Sunrise Prayer to Late Night Music",
+      "ground_truth_sentence": "After watching YouTube, I played games until 22:00, then performed the Isha prayer and ended the day by listening to music before going to sleep.",
+      "predicted_sentences": "These prayers mark the boundaries of my day and guide each next step. After Maghrib, the pace slows and the evening shifts toward rest. Later, I perform the Isha prayer and prepare to sleep.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 29,
+      "sid": 17,
+      "account": "25051130016",
+      "eid": 699,
+      "topic": "Early Start, Project Finish, Evening Dance",
+      "ground_truth_sentence": "Overall, the day felt long yet productive, filled with a mix of academic responsibilities, creative activities, and meaningful collaboration.",
+      "predicted_sentences": "After the call, I reviewed my checklist and set a simple plan for tomorrow. Moreover, I prepared my materials so the morning routine would stay on track. Thus, I set my alarms and closed the day with a clear anchor for the next morning.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 30,
+      "sid": 29,
+      "account": "25051130028",
+      "eid": 1262,
+      "topic": "Order Found: Organization, Play, and Focused Learning",
+      "ground_truth_sentence": "Before ending the day, I completed some trash taking, clearing out clutter from the earlier cleanup and finishing with a sense of lightness and accomplishment that carried me into the evening.",
+      "predicted_sentences": "With that calm established, I carry the same steady focus into a short break, opening a game to reset my attention. After a few measured rounds, I return to my notes with clearer priorities. Thus the day moves from order to rest to deliberate review.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 31,
+      "sid": 33,
+      "account": "25051130033",
+      "eid": 1445,
+      "topic": "Friday Flow Project Work and Digital Rest",
+      "ground_truth_sentence": "Later at night, I studied programming from the web building Java class until I felt sleepy and finally went to bed.",
+      "predicted_sentences": "Later in the evening, I set a limit on screen time and reviewed our project notes. Then I prepared my things for tomorrow because an early start is necessary. Finally, I went to bed to keep the routine.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 32,
+      "sid": 34,
+      "account": "25051130034",
+      "eid": 1491,
+      "topic": "Friday Hustle Bureaucracy Arts and Family Gathering",
+      "ground_truth_sentence": "There was a big family event happening there.",
+      "predicted_sentences": "Later that night, I reviewed our project notes and set a simple plan for tomorrow. After that, I wrote a brief summary of the event schedule to support the Perkap process. In the end, these shared rituals and tasks kept my day orderly and calm.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 33,
+      "sid": 35,
+      "account": "25051130035",
+      "eid": 1537,
+      "topic": "Routine Day Ends with Tough Taekwondo and Friends",
+      "ground_truth_sentence": "I got home around 9 PM, took a warm shower, had dinner, and then spent the rest of the night relaxing and finished up my Lingou journal for the last time.",
+      "predicted_sentences": "After I got home, I cooled down with a quick shower and stretched. Then I played a few rounds to unwind because gaming helps me relax after practice. By night I felt tired but satisfied, so I went to bed early.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 34,
+      "sid": 36,
+      "account": "25051130037",
+      "eid": 1584,
+      "topic": "Recovery, Code Confusion, and Devotional Prep",
+      "ground_truth_sentence": "I look forward to being a better person tomorrow.",
+      "predicted_sentences": "After the quiz, I took a short break and then prepared for the Way of the Cross. Later, I reviewed the steps for the second station and noted the key lines.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 35,
+      "sid": 37,
+      "account": "25051130038",
+      "eid": 1631,
+      "topic": "Circuit Discovery, Friday Prayer, and Tinkercad Lessons",
+      "ground_truth_sentence": "It still had errors, but I kept trying.",
+      "predicted_sentences": "Later in the evening, I listed clear steps to make the circuit neater for tomorrow. Then I messaged my group to confirm our next meeting and compare progress. Finally, I noted why each activity today helped the process and kept me on schedule.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 36,
+      "sid": 38,
+      "account": "25051130039",
+      "eid": 1677,
+      "topic": "Unrushed Day of Gaming and Quiet Folds",
+      "ground_truth_sentence": "Later I just went to bed and slept soundly.",
+      "predicted_sentences": "Looking back, this slow day helped me reset and think about what to improve after the test. Tomorrow I will set one small study goal and keep a calm pace. This feels like steady progress.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 37,
+      "sid": 39,
+      "account": "25051130040",
+      "eid": 1724,
+      "topic": "Busy Day Laughter Study and Chaotic Fun",
+      "ground_truth_sentence": "Even though I end the day feeling tired, it still feel enjoyable and productive.",
+      "predicted_sentences": "Before bed, I looked back and saw that simple steps and set times guided me through the day. As a result, I could handle the hard parts and still enjoy time with friends.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 38,
+      "sid": 40,
+      "account": "25051130041",
+      "eid": 1764,
+      "topic": "Early Rise, Epic Game, Echoes of Fatherhood",
+      "ground_truth_sentence": "it stings a bit, but it's what it's.",
+      "predicted_sentences": "It made me think about the simple times we had, like quiet chores and short talks. I realized I still carry some of what he tried to teach me, even when I didn’t listen back then. Maybe that’s why the ending felt so personal to me today.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 39,
+      "sid": 41,
+      "account": "25051130042",
+      "eid": 1811,
+      "topic": "Early Start, Study Sessions, and Early Bed",
+      "ground_truth_sentence": "After it was done, I still felt sleepy, so I just got ready and went back to bed.",
+      "predicted_sentences": "After the call ended around 6:30 PM, I outlined my tasks for tomorrow. This schedule helped me stay focused and manage the final project steps. Consequently, I set a simple plan for the next study session.",
+      "bge_m3_score": ""
+    },
+    {
+      "no": 40,
+      "sid": 42,
+      "account": "25051130043",
+      "eid": 1858,
+      "topic": "Library Study and Crowded Chicken Noodles",
+      "ground_truth_sentence": "Overall, it was a productive and enjoyable day.",
+      "predicted_sentences": "This routine showed me that clear planning and small adjustments improve my focus. Consequently, I stayed prepared and used my time well. Therefore, the day reinforced my habit of steady preparation.",
+      "bge_m3_score": ""
+    }
+  ],
+  "timestamp": 1783956665.7365386
+}

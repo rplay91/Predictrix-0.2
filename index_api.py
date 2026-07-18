@@ -65,8 +65,8 @@ def get_user_essays(sid: str) -> Dict[str, Union[bool, str, List[dict]]]:
                     'source': essay['source'],
                     'topic': essay['topic'],
                     'content': essay['content'],
-                    'date': essay['updated_at'].strftime('%Y-%m-%d'),
-                    'images': images  # 儲存所有圖片路徑
+                    'date': essay['updated_at'].strftime('%Y-%m-%d') if essay['updated_at'] else '',
+                    'images': images
                 }
                 essays.append(formatted_essay)
             return {

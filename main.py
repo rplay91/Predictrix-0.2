@@ -7,10 +7,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import List
-from fastapi.responses import JSONResponse
-from fastapi import Request
-from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 # python function
 from login_api import verify_login, verify_teacher_login
@@ -34,63 +30,63 @@ templates = Jinja2Templates(directory="templates")
 # Public page routes
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 @app.get("/login", response_class=HTMLResponse)
 async def login(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html")
 
 @app.get("/404", response_class=HTMLResponse)
 async def error(request: Request):
-    return templates.TemplateResponse("404.html", {"request": request})
+    return templates.TemplateResponse(request, "404.html")
 
 @app.get("/show_essay", response_class=HTMLResponse)
 async def show_essay(request: Request):
-    return templates.TemplateResponse("show_essay.html", {"request": request})
+    return templates.TemplateResponse(request, "show_essay.html")
 
 @app.get("/hw1_writing_setup", response_class=HTMLResponse)
 async def hw1_writing_setup(request: Request):
-    return templates.TemplateResponse("hw1_writing_setup.html", {"request": request})
+    return templates.TemplateResponse(request, "hw1_writing_setup.html")
 
 @app.get("/hw1_writing", response_class=HTMLResponse)
 async def hw1_writing(request: Request):
-    return templates.TemplateResponse("hw1_writing.html", {"request": request})
+    return templates.TemplateResponse(request, "hw1_writing.html")
 
 @app.get("/hw2_writing_setup", response_class=HTMLResponse)
 async def hw2_writing_setup(request: Request):
-    return templates.TemplateResponse("hw2_writing_setup.html", {"request": request})
+    return templates.TemplateResponse(request, "hw2_writing_setup.html")
 
 @app.get("/hw2_writing", response_class=HTMLResponse)
 async def hw2_writing(request: Request):
-    return templates.TemplateResponse("hw2_writing.html", {"request": request})
+    return templates.TemplateResponse(request, "hw2_writing.html")
 
 @app.get("/test1_writing", response_class=HTMLResponse)
 async def test1_writing(request: Request):
-    return templates.TemplateResponse("test1_writing.html", {"request": request})
+    return templates.TemplateResponse(request, "test1_writing.html")
 
 @app.get("/test2_writing", response_class=HTMLResponse)
 async def test2_writing(request: Request):
-    return templates.TemplateResponse("test2_writing.html", {"request": request})
+    return templates.TemplateResponse(request, "test2_writing.html")
 
 @app.get("/hw_writing_setup_instruct", response_class=HTMLResponse)
 async def hw_writing_setup_instruct(request: Request):
-    return templates.TemplateResponse("hw_writing_setup_instruct.html", {"request": request})
+    return templates.TemplateResponse(request, "hw_writing_setup_instruct.html")
 
 @app.get("/hw_writing_instruct", response_class=HTMLResponse)
 async def hw_writing_instruct(request: Request):
-    return templates.TemplateResponse("hw_writing_instruct.html", {"request": request})
+    return templates.TemplateResponse(request, "hw_writing_instruct.html")
 
 @app.get("/teacher_index", response_class=HTMLResponse)
 async def teacher_index(request: Request):
-    return templates.TemplateResponse("teacher_index.html", {"request": request})
+    return templates.TemplateResponse(request, "teacher_index.html")
 
 @app.get("/predict_test", response_class=HTMLResponse)
 async def predict_test(request: Request):
-    return templates.TemplateResponse("predict_test.html", {"request": request})
+    return templates.TemplateResponse(request, "predict_test.html")
 
 @app.get("/predict_batch", response_class=HTMLResponse)
 async def predict_batch(request: Request):
-    return templates.TemplateResponse("predict_batch.html", {"request": request})
+    return templates.TemplateResponse(request, "predict_batch.html")
 
 
 # Login request payload
@@ -310,7 +306,7 @@ async def api_predict_sentence(predict_request: PredictRequest):
         sid = predict_request.sid
         eid = predict_request.eid
 
-        result, user_prompt = await get_predict_sentence(
+        result, sentences_list, user_prompt = await get_predict_sentence(
             sid=sid,
             eid=eid,
             current_essay_content=predict_request.current_essay_content,
@@ -322,6 +318,7 @@ async def api_predict_sentence(predict_request: PredictRequest):
         return JSONResponse(content={
             "success": True,
             "predict_sentence": result,
+            "predict_sentences": sentences_list,
             "predict_prompt": user_prompt
         })
     except Exception as e:

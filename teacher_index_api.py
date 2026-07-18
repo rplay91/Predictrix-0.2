@@ -28,16 +28,7 @@ def get_all_essay_list() -> Dict[str, Union[bool, str, List[Dict]]]:
         JOIN 
             essay_info ei ON es.eid = ei.eid
         WHERE 
-            s.account IN (
-                '12a-2_Alexander',
-                '12b-30_Vidya',
-                '12b-5_Bayu',
-                '12c-27_Olga',
-                '12e-22_Kenneth',
-                '12f-26_Mellinda',
-                '12a-25_Nathania'
-            )
-            AND es.source NOT LIKE 'Previous%'
+            es.source NOT LIKE 'Previous%'
         ORDER BY 
             ei.eid DESC
         """        

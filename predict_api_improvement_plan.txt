@@ -1,0 +1,206 @@
+======================================================================
+ PLAN: Improve predict_api.py for Higher Semantic Similarity (BGE-M3 ≥ 0.84)
+======================================================================
+
+Current file: predict_api.py
+Key function: predict_sentence() at line 1119
+Prompt section: lines 1142–1223
+Model: gpt-5 (line 1235)
+
+======================================================================
+ PROBLEM ANALYSIS (from 40-student evaluation)
+======================================================================
+
+Comparison of Ground Truth (GT) vs Original Predictions (OLD):
+
+  GT:  "I went back home around 6 PM and took a well-deserved rest
+        after a productive and meaningful day."
+  OLD: "In the evening at home, I paused to reflect on the day.
+        Overall, the work and progress felt meaningful."
+
+  GT:  "After watching YouTube, I played games until 22:00, then
+        performed the Isha prayer and ended the day by listening
+        to music before going to sleep."
+  OLD: "(empty — prediction failed)"
+
+  GT:  "I go home with big smile."
+  OLD: "Therefore, today showed me that careful checking and teamwork
+        make problems possible."
+
+  GT:  "it stings a bit, but it's what it's."
+  OLD: "It made me think about the simple times we had, like quiet
+        chores and short talks."
+
+Key Issues Identified:
+──────────────────────
+
+ A. Too generic / abstract
+    - Predictions use "reflect", "progress", "balanced", "overall"
+    - GT uses concrete: "6 PM", "grilled chicken", "Isha prayer", "Magelang"
+    - The model strips out specific entities and replaces with summaries.
+
+ B. Wrong tone / voice
+    - Predictions sound like a formal writing coach
+    - GT sounds like a student: informal, first-person, emotional
+    - Examples: "it's what it's" vs "It made me think about..."
+
+ C. Overuse of transition crutches
+    - "Therefore,", "Overall,", "As a result,", "Afterward,"
+    - These make predictions feel templated, not authentic.
+
+ D. Sentence pattern dependency is too strict
+    - When get_or_create_sentence_pattern() fails, the whole prediction
+      fails (sids 9, 14, 17, 29 in first run)
+    - The pattern sometimes forces unnatural structure
+
+ E. No personal details from essay context
+    - The essay contains specific details (times, places, names) but
+      the prediction doesn't use them
+    - PTM RAG and history snippets have rich context but it's not
+      reflected in the output
+
+ F. Writing style analysis is not effectively used
+    - writing_patterns_formatted_output and writing_features_formatted_output
+      are provided but the prompt doesn't force the model to mirror them
+
+======================================================================
+ RECOMMENDED CHANGES
+======================================================================
+
+1. REVISE THE PROMPT (lines 1142–1223)
+──────────────────────────────────────
+
+   Current: "match the student's actual writing style"
+   Better:  explicit examples of good vs bad output
+
+   Add a "STYLE RULES" section:
+   - Copy the student's informal tone if present
+   - Use first-person "I" always
+   - Include at least one specific detail (time, place, activity) from
+     the essay in every prediction sentence
+   - Never start with "Therefore" or "Overall" — prefer natural starters
+     like "Then", "After that", or just state the action directly
+   - If the last ground truth sentence has a unique phrase (e.g. "it's
+     what it's", "big smile", "social battery"), mirror that kind of
+     expression
+
+2. ADD FEW-SHOT EXAMPLES TO THE PROMPT
+────────────────────────────────────────
+
+   Include 2–3 examples in the prompt showing:
+     Essay excerpt → Good prediction
+   Example:
+     Essay: "...After that, I took a rest and thought about what I should
+     do next."
+     Prediction: "Afterward, I sat down and rested for a little while,
+     just thinking about what steps I should take next."
+
+3. FIX get_or_create_sentence_pattern() (line 1256)
+─────────────────────────────────────────────────────
+
+   The fallback pattern "Type: General narrative summary" works (I added
+   it), but we should also:
+   - Log the actual error for debugging
+   - Return a more specific fallback based on the writing purpose
+   - Ensure the function never throws (currently wrapped in try/except
+     but the LLM call inside identify_sentence_pattern may still fail)
+
+4. INJECT ESSAY-SPECIFIC VOCABULARY INTO THE PROMPT
+─────────────────────────────────────────────────────
+
+   Currently "Extracted Vocabulary Context" is commented out (line 1138).
+   Uncomment it and pass a simple list of:
+   - Unique nouns from the essay (places, people, activities)
+   - Time expressions used
+   - Emotional words used by the student
+   This gives the model concrete lexical targets.
+
+5. ADD A "LAST SENTENCE STYLE" ANALYZER
+─────────────────────────────────────────
+
+   Before generating, analyze the last 1-2 sentences of the essay:
+   - Are they long or short?
+   - Formal or informal?
+   - Do they include time references?
+   - What's the emotional tone?
+   Include this analysis in the prompt so the prediction matches.
+
+6. REDUCE REASONING EFFORT (line 1236)
+───────────────────────────────────────
+
+   reasoning_effort="low" is already set — keep it.
+
+7. INCREASE MODEL TEMPERATURE
+─────────────────────────────
+
+   The current call doesn't set temperature. Add temperature=0.7 or 0.8
+   to encourage more natural variation in output.
+
+8. ADD A VALIDATION STEP
+─────────────────────────
+
+   After generating, check:
+   - If predicted sentences have no specific details → regenerate
+   - If predicted sentences start with "Therefore" or "Overall" → flag
+   - If predicted sentences are identical to essay content → regenerate
+
+======================================================================
+ PROMPT REWRITE OUTLINE (for tomorrow's session)
+======================================================================
+
+Replace the current prompt (lines 1142–1223) with:
+
+  ┌─────────────────────────────────────────────────────────────────
+  │ # Instruction:
+  │ You are an AI that writes the next 2–3 sentences of a student's
+  │ English journal. Match the student's exact voice, tone, and level
+  │ of detail. Be specific. Be concrete. Be personal.
+  │ 
+  │ # Critical Rules:
+  │ 1. Use specific details from the essay (times, places, people,
+  │    activities). NEVER replace them with generic summaries.
+  │ 2. Match the student's formality level. If they write informally
+  │    ("I'm super tired", "it's what it's"), you write informally too.
+  │ 3. Use first-person "I" throughout.
+  │ 4. Do NOT start with "Therefore", "Overall", "As a result", or
+  │    "Consequently". Start naturally.
+  │ 5. Include at least one concrete detail in every sentence.
+  │ 6. Output exactly 2 or 3 sentences.
+  │ 
+  │ # Examples:
+  │ BAD: "Overall, the balance of focused work and brief rest
+  │       supported steady progress throughout the day."
+  │ GOOD: "After eating, I reviewed my training notes and organized
+  │        tasks for tomorrow. Then I set an alarm and got ready for
+  │        bed."
+  │ 
+  │ BAD: "It made me think about the simple times we had."
+  │ GOOD: "Yeah, it stings a little, but that's just how things are
+  │        sometimes. Nothing I can do about it now."
+  │ ...
+  └─────────────────────────────────────────────────────────────────
+
+======================================================================
+ FILES TO MODIFY
+======================================================================
+
+  1. predict_api.py
+     - Lines 1138: Uncomment vocabulary extraction
+     - Lines 1142–1223: Rewrite prompt per outline above
+     - Line 1234: Add temperature=0.8
+     - Lines 1256–1300: Improve fallback in get_or_create_sentence_pattern
+
+  2. Optionally: Add a helper function analyze_last_sentence_style()
+     that extracts tone, length, formality from the last 1-2 sentences.
+
+======================================================================
+ TESTING AFTER CHANGES
+======================================================================
+
+  Run: python3 evaluate_predictions.py
+  Then compare evaluation_results.xlsx (new) with evaluation_results_copy.xlsx
+  (ideal paraphrases) using BGE-M3.
+
+  Target: average BGE-M3 score ≥ 0.84 across all 40 students.
+
+======================================================================

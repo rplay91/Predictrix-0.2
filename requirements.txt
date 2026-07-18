@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+jinja2
 pydantic
 pymysql
 python-multipart
@@ -19,6 +20,8 @@ scipy
 scikit-learn
 sentencepiece
 transformers
-torch
+# Optional for local transformer model workloads; not required for launching the FastAPI app.
+# Install separately if needed, for example with the CPU wheel index from PyTorch.
+# torch
 graphrag==0.3.4
 Pillow
